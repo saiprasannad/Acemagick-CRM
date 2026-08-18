@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acemagick CRM</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- Supabase & Excel Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{brand:{50:'#ecfdf5',100:'#d1fae5',200:'#a7f3d0',300:'#6ee7b7',400:'#34d399',500:'#10b981',600:'#059669',700:'#047857',800:'#065f46',900:'#064e3b'},sidebar:'#0B1120'},fontFamily:{sans:['DM Sans','sans-serif']}}}}
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',sans-serif;background:#F4F6FA;overflow:hidden;height:100vh}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:9px}
+.login-bg{background:linear-gradient(135deg,#0B1120,#0F2027 40%,#064e3b)}
+.nav-item{transition:all .2s}.nav-item:hover{background:#131D33}.nav-item.active{background:linear-gradient(90deg,rgba(16,185,129,.15),transparent);border-right:3px solid #10b981;color:#10b981}
+.kanban-col{min-height:300px}.lead-card{transition:all .2s;cursor:grab}.lead-card:active{cursor:grabbing}
+.kanban-col.drag-over{background:rgba(16,185,129,.06);border:2px dashed #10b981;border-radius:12px}
+.msg-sent{background:#DCF8C6;border-radius:12px 12px 0 12px;margin-left:auto}
+.msg-received{background:#fff;border-radius:12px 12px 12px 0}
+.msg-bot{background:#E8F5E9;border-radius:12px 12px 12px 0;border-left:3px solid #10b981}
+.dial-btn{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;transition:all .15s;cursor:pointer}.dial-btn:hover{transform:scale(1.08)}.dial-btn:active{transform:scale(.95)}
+.fade-in{animation:fadeIn .3s ease}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.toast{animation:slideIn .3s ease}@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.stage-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.12)}
+.switch{position:relative;width:44px;height:24px;cursor:pointer;display:inline-block}.switch input{opacity:0;width:0;height:0;position:absolute}.switch .slider{position:absolute;inset:0;background:#CBD5E1;border-radius:24px;transition:.3s}.switch .slider:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}.switch input:checked+.slider{background:#10b981}.switch input:checked+.slider:before{transform:translateX(20px)}
+.email-row:hover{background:#f8fafc}.email-row.sel{background:#ecfdf5;border-left:3px solid #10b981}
+.pipeline-col{width:280px;}
+.tunnel-line{position:absolute;top:50%;right:-24px;width:24px;height:2px;background:#10b981;z-index:10}
+.tunnel-line::after{content:'';position:absolute;right:0;top:-4px;width:0;height:0;border-left:8px solid #10b981;border-top:5px solid transparent;border-bottom:5px solid transparent}
+@media(max-width:768px){.sidebar-desktop{transform:translateX(-100%);position:fixed;z-index:90;height:100vh}.sidebar-desktop.open{transform:translateX(0)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo, useRef, useContext, createContext } = React;
+
+const VIEW_TITLES = { dashboard: 'Dashboard', leads: 'Leads Pipeline', pipelines: 'Pipelines & Tunnels', whatsapp: 'WhatsApp', calls: 'Voice Calls', email: 'Email', quotations: 'Quotations', invoices: 'Invoices', team: 'Team Management' };
+const ACT_ICONS = { whatsapp: 'fa-brands fa-whatsapp text-green-500', call: 'fa-solid fa-phone text-blue-500', note: 'fa-solid fa-sticky-note text-yellow-500', email: 'fa-solid fa-envelope text-purple-500', proposal: 'fa-solid fa-file-lines text-teal-500', stage: 'fa-solid fa-arrow-right text-indigo-500' };
+const ACT_COLORS = { whatsapp: 'bg-green-100 text-green-600', call: 'bg-blue-100 text-blue-600', note: 'bg-yellow-100 text-yellow-600', email: 'bg-purple-100 text-purple-600', proposal: 'bg-teal-100 text-teal-600', stage: 'bg-indigo-100 text-indigo-600' };
+
+const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const genToken = () => 'inv_' + genId() + genId();
+
+const SUPABASE_URL = 'https://evtdlrpbwscivvbrsvvy.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2dGRscnBid3NjaXZ2YnJzdnZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5NDc2MDQsImV4cCI6MjEwMjUyMzYwNH0.ICvApBXidDdEtyRh9CmZtCyoA0dV8ECNvyoEEmVvqGk';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const memoryStore = {};
+const getStore = (k, d) => {
+  try {
+    const item = localStorage.getItem('acemagick_' + k);
+    if (item) return JSON.parse(item);
+    return d;
+  } catch (e) {
+    return memoryStore['acemagick_' + k] ? JSON.parse(memoryStore['acemagick_' + k]) : d;
+  }
+};
+const setStore = (k, v) => {
+  try {
+    localStorage.setItem('acemagick_' + k, JSON.stringify(v));
+  } catch (e) {
+    memoryStore['acemagick_' + k] = JSON.stringify(v);
+  }
+};
+
+const fmtDate = ts => { try { return new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); } catch(e) { return ''; } };
+const fmtTime = ts => { try { return new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); } catch(e) { return ''; } };
+const fmtDur = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+const fmtCur = n => '₹' + Number(n || 0).toLocaleString('en-IN');
+
+const getChatId = (phone) => {
+  if (!phone) return null;
+  return phone.replace(/[^\d]/g, '') + '@c.us';
+};
+
+const parseIsMe = (m) => {
+  if (m.from === 'me' || m.outgoing === true) return true;
+  const val = m.from_me !== undefined ? m.from_me : (m.fromMe !== undefined ? m.fromMe : false);
+  if (val === true || val === 1) return true;
+  if (typeof val === 'string') {
+    const lower = val.toLowerCase().trim();
+    if (lower === 'true' || lower === '1') return true;
+  }
+  return false;
+};
+
+const formatMsgTime = (time) => {
+  if (!time) return '';
+  if (typeof time === 'number') {
+    return new Date(time * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  }
+  return time;
+};
+
+const INITIAL_PIPELINES = [
+  { id: 'p1', name: 'Main Sales', stages: [
+    { id: 'new', label: 'New Lead', color: '#818CF8', bg: '#EEF2FF' },
+    { id: 'contacted', label: 'Contacted', color: '#38BDF8', bg: '#F0F9FF' },
+    { id: 'qualified', label: 'Qualified', color: '#10B981', bg: '#ECFDF5' },
+    { id: 'proposal', label: 'Proposal Sent', color: '#FBBF24', bg: '#FFFBEB' },
+    { id: 'negotiation', label: 'Negotiation', color: '#FB923C', bg: '#FFF7ED' },
+    { id: 'won', label: 'Won', color: '#059669', bg: '#D1FAE5', type: 'success' },
+    { id: 'lost', label: 'Lost', color: '#F87171', bg: '#FEF2F2', type: 'failed' }
+  ] },
+  { id: 'p2', name: 'Project Onboarding', stages: [
+    { id: 'kickoff', label: 'Kickoff', color: '#818CF8', bg: '#EEF2FF' },
+    { id: 'dev', label: 'Development', color: '#38BDF8', bg: '#F0F9FF' },
+    { id: 'review', label: 'Review', color: '#FBBF24', bg: '#FFFBEB' },
+    { id: 'deploy', label: 'Deployed', color: '#059669', bg: '#D1FAE5', type: 'success' }
+  ] }
+];
+
+const INITIAL_TUNNELS = [
+  { id: 't1', fromStageId: 'won', toPipelineId: 'p2', toStageId: 'kickoff', action: 'move' }
+];
+
+function seedData() {
+  if (getStore('v11', null)) return; 
+  const leads = [
+    { id: 'l1', name: 'Priya Sharma', phone: '+91 98765 43210', email: 'priya@example.com', company: 'TechStart', interest: 'Web Development', budget: '₹2,00,000', timeline: '1 month', source: 'WhatsApp', stage: 'new', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 2, updatedAt: Date.now() - 864e5, notes: '', activities: [{ type: 'whatsapp', text: 'AI bot initiated', at: Date.now() - 864e5 * 2 }] },
+    { id: 'l2', name: 'Rahul Mehta', phone: '+91 87654 32109', email: 'rahul@mehta.in', company: 'Mehta Industries', interest: 'Mobile App', budget: '₹5,00,000', timeline: '2-3 months', source: 'Website', stage: 'contacted', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 5, updatedAt: Date.now() - 864e5 * 3, notes: '', activities: [{ type: 'call', text: 'Outbound call', at: Date.now() - 864e5 * 4 }] },
+    { id: 'l3', name: 'Anita Desai', phone: '+91 76543 21098', email: 'anita@desai.com', company: 'Desai Enterprises', interest: 'Enterprise CRM', budget: '₹10,00,000', timeline: '3-6 months', source: 'Referral', stage: 'qualified', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 8, updatedAt: Date.now() - 864e5 * 2, notes: '', activities: [{ type: 'email', text: 'Sent brochure', at: Date.now() - 864e5 * 5 }] },
+    { id: 'l4', name: 'Vikram Singh', phone: '+91 65432 10987', email: 'vikram@singh.co', company: 'Singh Digital', interest: 'Digital Marketing', budget: '₹1,50,000', timeline: 'Immediately', source: 'WhatsApp', stage: 'proposal', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 12, updatedAt: Date.now() - 64e5, notes: '', activities: [{ type: 'proposal', text: 'Q-001 sent', at: Date.now() - 864e5 }] },
+    { id: 'l5', name: 'Neha Gupta', phone: '+91 54321 09876', email: 'neha@gupta.io', company: 'Gupta Cloud', interest: 'Cloud Migration', budget: '₹8,00,000', timeline: '1-2 months', source: 'LinkedIn', stage: 'negotiation', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 15, updatedAt: Date.now() - 36e5, notes: '', activities: [{ type: 'proposal', text: 'Q-002 sent', at: Date.now() - 864e5 * 10 }] },
+    { id: 'l6', name: 'Arjun Patel', phone: '+91 43210 98765', email: 'arjun@patel.com', company: 'Patel Ecom', interest: 'E-commerce', budget: '₹3,50,000', timeline: 'Completed', source: 'Website', stage: 'won', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 30, updatedAt: Date.now() - 864e5 * 7, notes: '', activities: [{ type: 'stage', text: 'Moved to Won', at: Date.now() - 864e5 * 7 }] },
+    { id: 'l7', name: 'Kavita Reddy', phone: '+91 32109 87654', email: 'kavita@reddy.org', company: 'Reddy Foundation', interest: 'Website Redesign', budget: '₹80,000', timeline: 'Undecided', source: 'WhatsApp', stage: 'lost', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 20, updatedAt: Date.now() - 864e5 * 14, notes: '', activities: [{ type: 'stage', text: 'Moved to Lost', at: Date.now() - 864e5 * 14 }] }
+  ];
+  const conversations = [];
+  const calls = [{ id: 'cl1', leadId: 'l2', contactName: 'Rahul Mehta', contactPhone: '+91 87654 32109', type: 'outgoing', duration: 342, recorded: true, status: 'completed', startedAt: Date.now() - 864e5 * 4, endedAt: Date.now() - 864e5 * 4 + 342e3 }];
+  const quotations = [
+    { id: 'q1', number: 'Q-001', leadId: 'l4', customerName: 'Vikram Singh', customerEmail: 'vikram@singh.co', items: [{ desc: 'SEO Optimization - 6 months', qty: 1, rate: 60000 }, { desc: 'Social Media Management', qty: 1, rate: 40000 }], tax: 18, status: 'sent', createdAt: Date.now() - 864e5, validUntil: Date.now() + 864e5 * 29 },
+    { id: 'q2', number: 'Q-002', leadId: 'l5', customerName: 'Neha Gupta', customerEmail: 'neha@gupta.io', items: [{ desc: 'Cloud Audit', qty: 1, rate: 150000 }, { desc: 'Migration Planning', qty: 1, rate: 500000 }], tax: 18, status: 'sent', createdAt: Date.now() - 864e5 * 10, validUntil: Date.now() + 864e5 * 20 }
+  ];
+  const invoices = [{ id: 'inv1', number: 'INV-001', quotationId: 'q1', leadId: 'l6', customerName: 'Arjun Patel', customerEmail: 'arjun@patel.com', items: [{ desc: 'E-commerce Platform', qty: 1, rate: 280000 }, { desc: 'Payment Gateway', qty: 1, rate: 50000 }], tax: 18, status: 'paid', dueDate: Date.now() - 864e5 * 14, createdAt: Date.now() - 864e5 * 30, paidAt: Date.now() - 864e5 * 7 }];
+  const emailConfig = { serviceId: '', templateId: '', publicKey: '', fromName: 'Admin User', fromEmail: 'admin@nexacrm.com', signature: 'Best regards,\nAdmin User\nNexaCRM Solutions', connected: false };
+  const emailMessages = [
+    { id: 'em1', folder: 'inbox', from: 'priya@example.com', fromName: 'Priya Sharma', to: 'admin@nexacrm.com', subject: 'Inquiry about Web Development', body: 'Hi,\n\nI am interested in your web development services.\n\nThanks,\nPriya', date: Date.now() - 864e5 * 2, read: false, leadId: 'l1' },
+    { id: 'em2', folder: 'inbox', from: 'anita@desai.com', fromName: 'Anita Desai', to: 'admin@nexacrm.com', subject: 'Re: Enterprise CRM Demo', body: 'Hello,\n\nWe would like to schedule a demo next week.\n\nAnita', date: Date.now() - 864e5 * 5, read: true, leadId: 'l3' },
+    { id: 'em3', folder: 'sent', from: 'admin@nexacrm.com', fromName: 'Admin User', to: 'anita@desai.com', subject: 'Product Brochure', body: 'Hi Anita,\n\nPlease find our brochure.\n\nBest,\nAdmin', date: Date.now() - 864e5 * 5, read: true, leadId: 'l3' }
+  ];
+  
+  setStore('leads', leads); 
+  setStore('conversations', conversations); 
+  setStore('calls', calls); 
+  setStore('quotations', quotations); 
+  setStore('invoices', invoices); 
+  setStore('emailConfig', emailConfig); 
+  setStore('emailMessages', emailMessages);
+  setStore('pipelines', INITIAL_PIPELINES);
+  setStore('tunnels', INITIAL_TUNNELS);
+  setStore('v11', true);
+}
+seedData();
+
+const AppContext = createContext();
+function AppProvider({ children }) {
+  const [loggedIn, setLoggedIn] = useState(() => getStore('session', null) ? true : false);
+  const [currentUser, setCurrentUser] = useState(() => getStore('currentUser', null));
+  const [view, setView] = useState('dashboard');
+  const [toasts, setToasts] = useState([]);
+  const [modalContent, setModalContent] = useState(null);
+  
+  const [leads, setLeads] = useState(() => getStore('leads', []));
+  const [conversations, setConversations] = useState(() => getStore('conversations', []));
+  const [calls, setCalls] = useState(() => getStore('calls', []));
+  const [quotations, setQuotations] = useState(() => getStore('quotations', []));
+  const [invoices, setInvoices] = useState(() => getStore('invoices', []));
+  
+  const [users, setUsers] = useState([]);
+  const [invitations, setInvitations] = useState([]);
+  
+  const [pipelines, setPipelines] = useState(() => getStore('pipelines', INITIAL_PIPELINES));
+  const [tunnels, setTunnels] = useState(() => getStore('tunnels', INITIAL_TUNNELS));
+  const [emailConfig, setEmailConfig] = useState(() => getStore('emailConfig', { serviceId: '', templateId: '', publicKey: '', fromName: '', fromEmail: '', signature: '', connected: false }));
+  const [emailMessages, setEmailMessages] = useState(() => getStore('emailMessages', []));
+  
+  const [whatsappTarget, setWhatsappTarget] = useState(null);
+
+  const allStages = useMemo(() => pipelines.flatMap(p => p.stages.map(s => ({ ...s, pipelineId: p.id, pipelineName: p.name }))), [pipelines]);
+
+  useEffect(() => {
+    const loadCloudData = async () => {
+      const { data: dbUsers } = await supabase.from('users').select('*');
+      if (dbUsers && dbUsers.length > 0) {
+        setUsers(dbUsers);
+      } else {
+        const adminUser = { name: 'Admin User', email: 'admin@nexacrm.com', phone: '+91 99999 00000', role: 'Admin', status: 'active', password: 'admin123' };
+        const { data: insertedAdmin } = await supabase.from('users').insert(adminUser).select().single();
+        if (insertedAdmin) setUsers([insertedAdmin]);
+      }
+      const { data: dbInvites } = await supabase.from('invitations').select('*');
+      if (dbInvites) setInvitations(dbInvites);
+    };
+    loadCloudData();
+  }, []);
+
+  useEffect(() => { setStore('leads', leads) }, [leads]);
+  useEffect(() => { setStore('conversations', conversations) }, [conversations]);
+  useEffect(() => { setStore('calls', calls) }, [calls]);
+  useEffect(() => { setStore('quotations', quotations) }, [quotations]);
+  useEffect(() => { setStore('invoices', invoices) }, [invoices]);
+  useEffect(() => { setStore('pipelines', pipelines) }, [pipelines]);
+  useEffect(() => { setStore('tunnels', tunnels) }, [tunnels]);
+  useEffect(() => { setStore('emailConfig', emailConfig) }, [emailConfig]);
+  useEffect(() => { setStore('emailMessages', emailMessages) }, [emailMessages]);
+  useEffect(() => { if (loggedIn && currentUser) setStore('session', { active: true }); }, [loggedIn, currentUser]);
+
+  const toast = useCallback((msg, type = 'success') => { const id = genId(); setToasts(p => [...p, { id, msg, type }]); setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500) }, []);
+  const navigate = useCallback(v => setView(v), []);
+
+  const transitionLead = useCallback((leadId, newStageId) => {
+    const tunnel = tunnels.find(t => t.fromStageId === newStageId);
+    const sourceStage = allStages.find(s => s.id === newStageId);
+    const sourceLabel = sourceStage ? sourceStage.label : newStageId;
+
+    if (!tunnel) {
+      setLeads(prev => prev.map(l => l.id === leadId ? {
+        ...l, stage: newStageId, updatedAt: Date.now(),
+        activities: [...(l.activities || []), { type: 'stage', text: 'Moved to ' + sourceLabel, at: Date.now(), author: currentUser?.name || 'System' }]
+      } : l));
+    } else {
+      const destStage = allStages.find(s => s.id === tunnel.toStageId);
+      const destPipeline = pipelines.find(p => p.id === tunnel.toPipelineId);
+      const destLabel = destStage ? destStage.label : tunnel.toStageId;
+      const destPipeName = destPipeline ? destPipeline.name : '';
+
+      if (tunnel.action === 'move') {
+        setLeads(prev => prev.map(l => l.id === leadId ? {
+          ...l, stage: tunnel.toStageId, updatedAt: Date.now(),
+          activities: [...(l.activities || []), { type: 'stage', text: `Moved via tunnel to ${destPipeName} > ${destLabel}`, at: Date.now(), author: 'Tunnel Automation' }]
+        } : l));
+        toast(`Lead automatically moved via tunnel to ${destLabel}`);
+      } else if (tunnel.action === 'copy') {
+        setLeads(prev => {
+          const orig = prev.find(l => l.id === leadId);
+          if (!orig) return prev;
+          const updatedOrig = { ...orig, stage: newStageId, updatedAt: Date.now(), activities: [...(orig.activities || []), { type: 'stage', text: `Copied via tunnel to ${destPipeName} > ${destLabel}`, at: Date.now(), author: 'Tunnel Automation' }] };
+          const copy = { ...orig, id: genId(), stage: tunnel.toStageId, name: orig.name + ' (Copy)', createdAt: Date.now(), updatedAt: Date.now(), activities: [{ type: 'stage', text: `Copied via tunnel from ${sourceLabel}`, at: Date.now(), author: 'Tunnel Automation' }] };
+          return [...prev.map(l => l.id === leadId ? updatedOrig : l), copy];
+        });
+        toast(`Lead automatically copied via tunnel to ${destLabel}`);
+      }
+    }
+  }, [tunnels, allStages, pipelines, toast, setLeads, currentUser]);
+
+  const val = useMemo(() => ({ loggedIn, setLoggedIn, currentUser, setCurrentUser, view, navigate, toasts, toast, modalContent, setModalContent, leads, setLeads, conversations, setConversations, calls, setCalls, quotations, setQuotations, invoices, setInvoices, users, setUsers, invitations, setInvitations, pipelines, setPipelines, tunnels, setTunnels, allStages, emailConfig, setEmailConfig, emailMessages, setEmailMessages, transitionLead, whatsappTarget, setWhatsappTarget }), [loggedIn, currentUser, view, toasts, modalContent, leads, conversations, calls, quotations, invoices, users, invitations, toast, navigate, pipelines, tunnels, allStages, emailConfig, emailMessages, transitionLead, whatsappTarget, setWhatsappTarget]);
+
+  return <AppContext.Provider value={val}>{children}</AppContext.Provider>;
+}
+function useApp() { return useContext(AppContext) }
+function StageBadge({ stageId }) { const { allStages } = useApp(); const s = allStages.find(x => x.id === stageId); return s ? <span className="stage-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span> : null; }
+function Modal() { const { modalContent, setModalContent } = useApp(); if (!modalContent) return null; return <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4" onClick={() => setModalContent(null)}><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto fade-in" onClick={e => e.stopPropagation()}>{modalContent}</div></div>; }
+function Toasts() { 
+  const { toasts } = useApp(); 
+  return (
+    <div className="fixed top-4 right-4 z-[300] space-y-2">
+      {toasts.map(t => (
+        <div 
+          key={t.id} 
+          className={"toast px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 " + (t.type === 'success' ? 'bg-brand-600 text-white' : t.type === 'error' ? 'bg-red-500 text-white' : 'bg-gray-800 text-white')}
+        >
+          <i className={"fa-solid " + (t.type === 'success' ? 'fa-check-circle' : t.type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle')}></i>
+          {t.msg}
+        </div>
+      ))}
+    </div>
+  ); 
+}
+function Toggle({ checked, onChange }) { return <label className="switch"><input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} /><span className="slider"></span></label>; }
+
+function Login() {
+  const { setLoggedIn, setCurrentUser, setModalContent } = useApp(); 
+  const [email, setEmail] = useState('admin@nexacrm.com'); 
+  const [pass, setPass] = useState('admin123'); 
+  const [err, setErr] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const go = async () => { 
+    setLoading(true); setErr(false);
+    const { data: user } = await supabase.from('users').select('*').eq('email', email).eq('password', pass).single();
+    if (user && user.status === 'active') { setStore('session', { active: true }); setStore('currentUser', user); setCurrentUser(user); setLoggedIn(true); } 
+    else if (user && user.status === 'invited') { setErr('Please accept your invite first.'); } 
+    else { setErr(true); }
+    setLoading(false);
+  };
+  return <div className="login-bg fixed inset-0 z-[200] flex items-center justify-center"><div className="w-full max-w-sm p-8"><div className="flex items-center gap-3 mb-8"><div className="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center text-xl font-bold text-white">N</div><span className="text-white text-2xl font-bold">NexaCRM</span></div><h2 className="text-2xl font-bold text-white mb-1">Welcome back</h2><p className="text-gray-400 mb-8 text-sm">Sign in</p><div className="space-y-4"><div><label className="text-xs text-gray-400 mb-1 block">Email</label><input value={email} onChange={e => { setEmail(e.target.value); setErr(false); }} className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white text-sm" /></div><div><label className="text-xs text-gray-400 mb-1 block">Password</label><input type="password" value={pass} onChange={e => { setPass(e.target.value); setErr(false); }} onKeyDown={e => e.key === 'Enter' && go()} className="w-full bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-white text-sm" /></div><button onClick={go} disabled={loading} className="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300 text-white font-semibold py-3 rounded-xl text-sm shadow-lg flex items-center justify-center gap-2">{loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Sign In'}</button>{err && <p className="text-red-400 text-xs text-center">{typeof err === 'string' ? err : 'Invalid credentials'}</p>}</div><div className="mt-6 text-center"><button onClick={() => setModalContent(<AcceptInviteModal />)} className="text-xs text-brand-400 hover:text-brand-300">Have an invite token? Click here</button></div></div></div>;
+}
+
+function AcceptInviteModal({ prefilledToken = '' }) {
+  const { invitations, setInvitations, users, setUsers, toast, setModalContent, setLoggedIn, setCurrentUser } = useApp();
+  const [token, setToken] = useState(prefilledToken);
+  const [pass, setPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const handleAccept = async () => {
+    setError(''); setLoading(true);
+    const { data: currentInvite, error: fetchError } = await supabase.from('invitations').select('*').eq('token', token).single();
+    if (!currentInvite || fetchError) { setError('Invalid invite token.'); setLoading(false); return; }
+    if (currentInvite.status === 'accepted') { setError('This invite has already been used.'); setLoading(false); return; }
+    if (Date.now() > new Date(currentInvite.expires_at).getTime()) { setError('This invite has expired.'); setLoading(false); return; }
+    if (pass.length < 6) { setError('Password must be at least 6 characters.'); setLoading(false); return; }
+    if (pass !== confirmPass) { setError('Passwords do not match.'); setLoading(false); return; }
+    const { data: existingUser } = await supabase.from('users').select('*').eq('email', currentInvite.email).single();
+    let loggedInUser;
+    if (existingUser) {
+      const { data: updatedUser } = await supabase.from('users').update({ status: 'active', password: pass, role: 'Agent' }).eq('id', existingUser.id).select().single();
+      loggedInUser = updatedUser;
+    } else {
+      const newUser = { name: currentInvite.email.split('@')[0], email: currentInvite.email, phone: currentInvite.phone || '', role: 'Agent', status: 'active', password: pass };
+      const { data: insertedUser } = await supabase.from('users').insert(newUser).select().single();
+      loggedInUser = insertedUser;
+    }
+    setUsers(prev => { const exists = prev.some(u => u.id === loggedInUser.id); return exists ? prev.map(u => u.id === loggedInUser.id ? loggedInUser : u) : [...prev, loggedInUser]; });
+    const { data: updatedInvite } = await supabase.from('invitations').update({ status: 'accepted' }).eq('id', currentInvite.id).select().single();
+    setInvitations(prev => prev.map(inv => inv.id === currentInvite.id ? updatedInvite : inv));
+    setStore('session', { active: true }); setStore('currentUser', loggedInUser); setCurrentUser(loggedInUser); setLoggedIn(true); setModalContent(null); toast('Invite accepted! Welcome to the team.'); setLoading(false);
+  };
+  return (
+    <div className="p-6 max-w-md mx-auto">
+      <div className="flex items-center justify-between mb-6"><h2 className="text-xl font-bold text-gray-800">Accept Invitation</h2><button onClick={() => setModalContent(null)} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button></div>
+      <div className="space-y-4">
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Invitation Token</label><input value={token} onChange={e => setToken(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Paste your invite token here" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Create Password</label><input type="password" value={pass} onChange={e => setPass(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Min 6 characters" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Confirm Password</label><input type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        {error && <p className="text-red-500 text-xs">{error}</p>}
+        <button onClick={handleAccept} disabled={loading} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600 flex items-center justify-center gap-2">{loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Accept & Create Account'}</button>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar() {
+  const { view, navigate, setLoggedIn, emailMessages, currentUser } = useApp();
+  const items = [
+    { id: 'dashboard', icon: 'fa-solid fa-grid-2', label: 'Dashboard', g: 'Main' }, 
+    { id: 'leads', icon: 'fa-solid fa-users', label: 'Leads', g: 'Main' }, 
+    { id: 'whatsapp', icon: 'fa-brands fa-whatsapp', label: 'WhatsApp', g: 'Main', ic: 'text-green-400' }, 
+    { id: 'calls', icon: 'fa-solid fa-phone', label: 'Calls', g: 'Main' }, 
+    { id: 'email', icon: 'fa-solid fa-envelope', label: 'Email', g: 'Main', ic: 'text-purple-400' }, 
+    { id: 'quotations', icon: 'fa-solid fa-file-lines', label: 'Quotations', g: 'Finance' }, 
+    { id: 'invoices', icon: 'fa-solid fa-receipt', label: 'Invoices', g: 'Finance' }, 
+    { id: 'pipelines', icon: 'fa-solid fa-diagram-project', label: 'Pipelines', g: 'Settings' }
+  ];
+  if (currentUser?.role === 'Admin') items.push({ id: 'team', icon: 'fa-solid fa-user-group', label: 'Team', g: 'Settings' });
+  const grp = {}; items.forEach(n => { if (!grp[n.g]) grp[n.g] = []; grp[n.g].push(n); });
+  const ur = emailMessages.filter(m => m.folder === 'inbox' && !m.read).length;
+  return <aside id="sidebar" className="sidebar-desktop w-64 bg-sidebar flex flex-col shrink-0"><div className="p-5 flex items-center gap-3 border-b border-white/5"><div className="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center text-lg font-bold text-white">N</div><span className="text-white text-lg font-bold">NexaCRM</span></div><nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">{Object.entries(grp).map(([g, its]) => <React.Fragment key={g}><div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-3 mb-2 mt-4">{g}</div>{its.map(n => <a key={n.id} onClick={() => navigate(n.id)} className={"nav-item " + (view === n.id ? 'active' : '') + " flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300 cursor-pointer"}><i className={n.icon + " w-5 text-center " + (n.ic || '')}></i>{n.label}{n.id === 'email' && ur > 0 && <span className="ml-auto bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">{ur}</span>}</a>)}</React.Fragment>)}</nav><div className="p-4 border-t border-white/5"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white text-sm font-bold">{currentUser?.name?.charAt(0) || 'A'}</div><div className="flex-1 min-w-0"><div className="text-sm text-white font-medium truncate">{currentUser?.name || 'Admin'}</div><div className="text-xs text-gray-500 truncate">{currentUser?.email || 'admin@nexacrm.com'}</div></div><button onClick={() => { setLoggedIn(false); setStore('session', null); setStore('currentUser', null); try { localStorage.removeItem('acemagick_session'); } catch(e){} }} className="text-gray-500 hover:text-red-400"><i className="fa-solid fa-right-from-bracket"></i></button></div></div></aside>;
+}
+
+function TopBar() { const { view } = useApp(); return <header className="h-14 bg-white border-b border-gray-100 flex items-center px-4 gap-4 shrink-0"><h2 className="text-sm font-semibold text-gray-800">{VIEW_TITLES[view] || view}</h2><div className="flex-1"></div></header>; }
+
+function Dashboard() {
+  const { leads, invoices, allStages } = useApp();
+  const total = leads.length;
+  const won = leads.filter(l => allStages.find(s => s.id === l.stage)?.type === 'success').length;
+  const convRate = total ? Math.round(won / total * 100) : 0;
+  const pipelineVal = leads.filter(l => !allStages.find(s => s.id === l.stage)?.type).reduce((s, l) => { const b = parseInt((l.budget || '0').replace(/[^\d]/g, '')) || 0; return s + b; }, 0);
+  const revenue = invoices.filter(i => i.status === 'paid').reduce((s, i) => { const sub = i.items.reduce((a, x) => a + x.qty * x.rate, 0); return s + sub * (1 + (i.tax || 18) / 100); }, 0);
+  const allActs = useMemo(() => { const a = []; leads.forEach(l => (l.activities || []).forEach(act => a.push({ ...act, leadName: l.name, leadId: l.id }))); a.sort((a, b) => b.at - a.at); return a; }, [leads]);
+  const stats = [
+    { label: 'Total Leads', val: total, sub: won + ' won', icon: 'fa-solid fa-users', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-500' },
+    { label: 'Pipeline', val: fmtCur(pipelineVal), sub: 'Active', icon: 'fa-solid fa-chart-line', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
+    { label: 'Conv. Rate', val: convRate + '%', icon: 'fa-solid fa-percent', iconBg: 'bg-amber-50', iconColor: 'text-amber-500', bar: true, barPct: convRate },
+    { label: 'Revenue', val: fmtCur(revenue), sub: 'Paid', icon: 'fa-solid fa-indian-rupee-sign', iconBg: 'bg-rose-50', iconColor: 'text-rose-500' }
+  ];
+  return (
+    <div className="fade-in">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {stats.map((c, i) => (
+          <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-gray-400 uppercase">{c.label}</span>
+              <div className={`w-9 h-9 rounded-lg ${c.iconBg} flex items-center justify-center`}><i className={`${c.icon} ${c.iconColor} text-sm`}></i></div>
+            </div>
+            <div className="text-3xl font-bold text-gray-800">{c.val}</div>
+            {c.bar ? (<div className="w-full bg-gray-100 rounded-full h-1.5 mt-2"><div className="bg-amber-400 h-1.5 rounded-full" style={{ width: Math.max(c.barPct, 4) + '%' }}></div></div>) : c.sub && <div className="text-xs text-gray-400 mt-1">{c.sub}</div>}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-800 mb-4">Pipeline by Stage</h3>
+          <div className="space-y-3">
+            {allStages.filter(s => !s.type).map(s => {
+              const cnt = leads.filter(l => l.stage === s.id).length;
+              const pct = total ? Math.round(cnt / total * 100) : 0;
+              return <div key={s.id} className="flex items-center gap-3"><span className="text-xs w-28 text-gray-500 truncate">{s.label}</span><div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden"><div className="h-full rounded-full flex items-center justify-end pr-2" style={{ width: Math.max(pct, 8) + '%', background: s.color }}><span className="text-[10px] text-white font-bold">{cnt}</span></div></div></div>;
+            })}
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-800 mb-4">Recent Activity</h3>
+          <div className="space-y-3 max-h-72 overflow-y-auto">
+            {allActs.slice(0, 8).map((a, i) => (
+              <div key={i} className="flex gap-3 items-start">
+                <div className={`w-7 h-7 rounded-full ${ACT_COLORS[a.type] || 'bg-gray-100 text-gray-400'} flex items-center justify-center shrink-0 mt-0.5`}><i className={`${ACT_ICONS[a.type] || 'fa-solid fa-circle text-gray-400'} text-xs`}></i></div>
+                <div><p className="text-xs text-gray-600">{a.text}</p><p className="text-[10px] text-gray-400 mt-0.5">{a.leadName}</p></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- ENHANCED LEADS VIEW WITH ALL DEALS, FILTERS, IMPORT/EXPORT ---
+function LeadsView() {
+  const { setModalContent, pipelines, leads, currentUser } = useApp();
+  const [subView, setSubView] = useState('kanban');
+  const [activePipelineId, setActivePipelineId] = useState(pipelines[0]?.id || 'all');
+  const [searchText, setSearchText] = useState('');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [customDateFrom, setCustomDateFrom] = useState('');
+  const [customDateTo, setCustomDateTo] = useState('');
+
+  const filteredLeads = useMemo(() => {
+    let res = leads;
+    if (currentUser?.role !== 'Admin') res = res.filter(l => l.assignedTo === currentUser?.id);
+    
+    if (searchText.trim()) {
+      const q = searchText.toLowerCase();
+      res = res.filter(l => 
+        l.name?.toLowerCase().includes(q) || 
+        l.email?.toLowerCase().includes(q) || 
+        l.phone?.replace(/\D/g, '').includes(q.replace(/\D/g, ''))
+      );
+    }
+    
+    if (activePipelineId !== 'all') {
+      const pipe = pipelines.find(p => p.id === activePipelineId);
+      if (pipe) {
+        const stageIds = pipe.stages.map(s => s.id);
+        res = res.filter(l => stageIds.includes(l.stage));
+      }
+    }
+    
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (dateFilter === 'today') res = res.filter(l => l.createdAt >= startOfToday);
+    if (dateFilter === 'yesterday') res = res.filter(l => l.createdAt >= startOfToday - 86400000 && l.createdAt < startOfToday);
+    if (dateFilter === '7days') res = res.filter(l => l.createdAt >= startOfToday - 7 * 86400000);
+    if (dateFilter === '30days') res = res.filter(l => l.createdAt >= startOfToday - 30 * 86400000);
+    if (dateFilter === 'month') res = res.filter(l => l.createdAt >= new Date(now.getFullYear(), now.getMonth(), 1).getTime());
+    if (dateFilter === 'last_month') {
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      res = res.filter(l => l.createdAt >= lastMonth && l.createdAt < thisMonth);
+    }
+    if (dateFilter === 'custom' && customDateFrom && customDateTo) {
+      const from = new Date(customDateFrom).getTime();
+      const to = new Date(customDateTo).getTime() + 86400000;
+      res = res.filter(l => l.createdAt >= from && l.createdAt <= to);
+    }
+    
+    return res;
+  }, [leads, searchText, activePipelineId, dateFilter, customDateFrom, customDateTo, currentUser, pipelines]);
+
+  const clearFilters = () => {
+    setSearchText(''); setDateFilter('all'); setCustomDateFrom(''); setCustomDateTo('');
+    if (subView === 'all') setActivePipelineId('all');
+    else setActivePipelineId(pipelines[0]?.id || 'all');
+  };
+
+  return (
+    <div className="fade-in flex flex-col gap-4">
+      {/* Top Toolbar */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+            {['kanban', 'list', 'all'].map(v => (
+              <button key={v} onClick={() => { setSubView(v); if(v !== 'all' && activePipelineId === 'all') setActivePipelineId(pipelines[0]?.id || ''); if(v === 'all') setActivePipelineId('all'); }} className={"px-4 py-1.5 rounded-md text-sm font-medium transition-all " + (subView === v ? 'bg-white shadow text-gray-800' : 'text-gray-500')}>
+                {v === 'all' ? 'All Deals' : v.charAt(0).toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
+          {subView !== 'all' && (
+            <select value={activePipelineId} onChange={e => setActivePipelineId(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
+              {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setModalContent(<ImportModal />)} className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2"><i className="fa-solid fa-file-import"></i>Import</button>
+          <button onClick={() => setModalContent(<ExportModal leads={filteredLeads} />)} className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2"><i className="fa-solid fa-file-export"></i>Export</button>
+          <button onClick={() => setModalContent(<CreateLeadModal defaultPipelineId={activePipelineId === 'all' ? (pipelines[0]?.id || '') : activePipelineId} />)} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><i className="fa-solid fa-plus"></i>Add Lead</button>
+        </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-wrap items-center gap-3">
+        <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="Search name, email, phone..." className="flex-1 min-w-[200px] border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+        {subView === 'all' && (
+          <select value={activePipelineId} onChange={e => setActivePipelineId(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="all">All Pipelines</option>
+            {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
+        <select value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
+          <option value="all">Any Date</option>
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="7days">Last 7 Days</option>
+          <option value="30days">Last 30 Days</option>
+          <option value="month">This Month</option>
+          <option value="last_month">Last Month</option>
+          <option value="custom">Custom Range</option>
+        </select>
+        {dateFilter === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input type="date" value={customDateFrom} onChange={e => setCustomDateFrom(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+            <span className="text-xs text-gray-500">to</span>
+            <input type="date" value={customDateTo} onChange={e => setCustomDateTo(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+          </div>
+        )}
+        <button onClick={clearFilters} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">Clear Filters</button>
+      </div>
+
+      {/* Views */}
+      {subView === 'kanban' && <KanbanView activePipelineId={activePipelineId} leads={filteredLeads} />}
+      {subView === 'list' && <ListView leads={filteredLeads} />}
+      {subView === 'all' && <AllDealsView leads={filteredLeads} pipelines={pipelines} />}
+    </div>
+  );
+}
+
+function KanbanView({ activePipelineId, leads }) {
+  const { transitionLead, setModalContent, pipelines, tunnels } = useApp();
+  const [dragId, setDragId] = useState(null); const [overStage, setOverStage] = useState(null);
+  const activePipeline = pipelines.find(p => p.id === activePipelineId) || { stages: [] };
+
+  const handleDrop = (stageId) => {
+    if (!dragId) return;
+    transitionLead(dragId, stageId);
+    setDragId(null); setOverStage(null);
+  };
+
+  return (
+    <div className="flex gap-4 overflow-x-auto pb-4">
+      {activePipeline.stages.map(s => {
+        const sLeads = leads.filter(l => l.stage === s.id);
+        const hasTunnel = tunnels.some(t => t.fromStageId === s.id);
+        return (
+          <div key={s.id} className={"kanban-col min-w-[260px] w-[260px] flex-shrink-0 rounded-xl p-2 transition-all relative " + (overStage === s.id ? 'drag-over' : '')} onDragOver={e => { e.preventDefault(); setOverStage(s.id); }} onDragLeave={() => setOverStage(null)} onDrop={() => handleDrop(s.id)}>
+            {hasTunnel && <div className="tunnel-line"></div>}
+            <div className="flex items-center gap-2 mb-3 px-1"><div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }}></div><span className="text-xs font-semibold text-gray-600 uppercase">{s.label}</span><span className="ml-auto text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{sLeads.length}</span></div>
+            <div className="space-y-2">
+              {sLeads.map(l => (
+                <div key={l.id} className="lead-card bg-white rounded-xl p-4 border border-gray-100 shadow-sm hover:shadow-md" draggable="true" onDragStart={() => setDragId(l.id)} onDragEnd={() => setDragId(null)} onClick={() => setModalContent(<LeadDetail leadId={l.id} />)}>
+                  <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{l.name.split(' ').map(n => n[0]).join('')}</div><div className="min-w-0"><div className="text-sm font-semibold text-gray-800 truncate">{l.name}</div><div className="text-xs text-gray-400 truncate">{l.company || ''}</div></div></div>
+                  <div className="text-xs text-gray-500"><i className="fa-solid fa-tag mr-1"></i>{l.interest || '—'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ListView({ leads }) { 
+  const { setLeads, toast, setModalContent, currentUser, setWhatsappTarget, navigate } = useApp(); 
+  const deleteLead = (id, e) => { e.stopPropagation(); setLeads(prev => prev.filter(l => l.id !== id)); toast('Deleted', 'info'); }; 
+  const handleWhatsAppClick = (e, lead) => {
+    e.stopPropagation();
+    if (!lead.phone) return toast('No phone number available', 'error');
+    setWhatsappTarget(lead.id);
+    navigate('whatsapp');
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase">
+            <th className="px-5 py-3">Name</th><th className="px-5 py-3">Phone</th><th className="px-5 py-3">Stage</th><th className="px-5 py-3">Budget</th><th className="px-5 py-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {leads.map(l => (
+            <tr key={l.id} className="border-t border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => setModalContent(<LeadDetail leadId={l.id} />)}>
+              <td className="px-5 py-3 font-medium text-gray-800">{l.name}</td>
+              <td className="px-5 py-3 text-gray-600">
+                <div className="flex items-center gap-2">
+                  {l.phone}
+                  {l.phone && (<button onClick={(e) => handleWhatsAppClick(e, l)} className="text-green-500 hover:text-green-600" title="Chat on WhatsApp"><i className="fa-brands fa-whatsapp"></i></button>)}
+                </div>
+              </td>
+              <td className="px-5 py-3"><StageBadge stageId={l.stage} /></td>
+              <td className="px-5 py-3 text-gray-600">{l.budget || '—'}</td>
+              <td className="px-5 py-3"><button onClick={e => deleteLead(l.id, e)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AllDealsView({ leads, pipelines }) {
+  const { setModalContent } = useApp();
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase">
+            <th className="px-5 py-3">Name</th><th className="px-5 py-3">Phone</th><th className="px-5 py-3">Pipeline</th><th className="px-5 py-3">Stage</th><th className="px-5 py-3">Budget</th><th className="px-5 py-3">Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {leads.map(l => {
+            const pipe = pipelines.find(p => p.stages.some(s => s.id === l.stage));
+            return (
+              <tr key={l.id} className="border-t border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => setModalContent(<LeadDetail leadId={l.id} />)}>
+                <td className="px-5 py-3 font-medium text-gray-800">{l.name}</td>
+                <td className="px-5 py-3 text-gray-600">{l.phone}</td>
+                <td className="px-5 py-3 text-gray-600">{pipe?.name || 'Unknown'}</td>
+                <td className="px-5 py-3"><StageBadge stageId={l.stage} /></td>
+                <td className="px-5 py-3 text-gray-600">{l.budget || '—'}</td>
+                <td className="px-5 py-3 text-gray-600">{fmtDate(l.createdAt)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// --- FIXED IMPORT & EXPORT MODALS ---
+function ExportModal({ leads, onClose }) {
+  const { toast, pipelines } = useApp();
+  const [format, setFormat] = useState('csv');
+
+  const handleExport = () => {
+    try {
+      if (!leads || leads.length === 0) {
+        toast('No leads found to export with current filters.', 'error');
+        return;
+      }
+
+      const data = leads.map(l => {
+        const pipe = pipelines.find(p => p.stages.some(s => s.id === l.stage));
+        const stage = pipe?.stages.find(s => s.id === l.stage);
+        return {
+          ID: l.id,
+          Name: l.name,
+          Phone: l.phone,
+          Email: l.email,
+          Company: l.company,
+          Pipeline: pipe?.name || 'Unknown',
+          Stage: stage?.label || 'Unknown',
+          Budget: l.budget,
+          Source: l.source,
+          CreatedAt: new Date(l.createdAt).toLocaleString(),
+          UpdatedAt: new Date(l.updatedAt).toLocaleString()
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Leads");
+      
+      // XLSX writeFile triggers the download automatically
+      XLSX.writeFile(wb, `NexaCRM_Leads_Export.${format}`, { bookType: format });
+      toast('Export successful!');
+      onClose();
+    } catch (error) {
+      console.error("Export Error:", error);
+      toast('Export failed. Check console for details.', 'error');
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-md mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-800">Export Deals</h2>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div className="space-y-4">
+        <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600">Exporting <b>{leads.length}</b> records (respecting current filters).</div>
+        <div>
+          <label className="text-xs font-medium text-gray-500 mb-1 block">Format</label>
+          <div className="flex gap-2">
+            <button onClick={() => setFormat('csv')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${format === 'csv' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}>CSV</button>
+            <button onClick={() => setFormat('xlsx')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${format === 'xlsx' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}>Excel (.xlsx)</button>
+          </div>
+        </div>
+        <button onClick={handleExport} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600">Export</button>
+      </div>
+    </div>
+  );
+}
+
+function ImportModal({ onClose }) {
+  const { leads, setLeads, pipelines, toast, currentUser } = useApp();
+  const [step, setStep] = useState(1);
+  const [targetPipelineId, setTargetPipelineId] = useState(pipelines[0]?.id || '');
+  const [defaultStageId, setDefaultStageId] = useState('');
+  const [fileData, setFileData] = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [mapping, setMapping] = useState({});
+  const [newRecords, setNewRecords] = useState([]);
+  const [duplicates, setDuplicates] = useState([]);
+  const [errorsList, setErrorsList] = useState([]);
+  const [duplicateAction, setDuplicateAction] = useState('skip');
+  const fileInputRef = useRef(null);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const data = new Uint8Array(event.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      if (json.length > 0) {
+        setHeaders(json[0]);
+        setFileData(json.slice(1));
+        const autoMap = {};
+        json[0].forEach(h => {
+          const lower = String(h).toLowerCase();
+          if (lower.includes('name')) autoMap[h] = 'name';
+          else if (lower.includes('phone') || lower.includes('mobile')) autoMap[h] = 'phone';
+          else if (lower.includes('email')) autoMap[h] = 'email';
+          else if (lower.includes('company')) autoMap[h] = 'company';
+          else if (lower.includes('budget') || lower.includes('amount')) autoMap[h] = 'budget';
+          else if (lower.includes('stage')) autoMap[h] = 'stage';
+          else if (lower.includes('source')) autoMap[h] = 'source';
+        });
+        setMapping(autoMap);
+        setStep(2);
+      } else {
+        toast('The uploaded file is empty.', 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const analyzeImport = () => {
+    const pipe = pipelines.find(p => p.id === targetPipelineId);
+    if (!pipe) return toast('Invalid pipeline', 'error');
+    
+    const validNew = [];
+    const dups = [];
+    const errs = [];
+    
+    fileData.forEach((row, idx) => {
+      const newLead = {
+        id: genId(),
+        assignedTo: currentUser?.id || 'u1',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        notes: '',
+        activities: [{ type: 'note', text: 'Imported via CSV/Excel', at: Date.now() }]
+      };
+      
+      headers.forEach((h, i) => {
+        const crmField = mapping[h];
+        if (crmField && row[i]) {
+          newLead[crmField] = String(row[i]);
+        }
+      });
+      
+      let finalStage = defaultStageId;
+      if (newLead.stage) {
+        const mappedStage = pipe.stages.find(s => s.label.toLowerCase() === newLead.stage.toLowerCase());
+        if (mappedStage) finalStage = mappedStage.id;
+      }
+      newLead.stage = finalStage || pipe.stages[0]?.id;
+      
+      if (!newLead.name) {
+        errs.push(`Row ${idx + 2}: Name missing.`);
+        return;
+      }
+      
+      const existing = leads.find(l => 
+        (l.email && newLead.email && l.email.toLowerCase() === newLead.email.toLowerCase()) || 
+        (l.phone && newLead.phone && l.phone.replace(/\D/g, '') === newLead.phone.replace(/\D/g, ''))
+      );
+      
+      if (existing) {
+        dups.push({ imported: newLead, existing: existing });
+      } else {
+        validNew.push(newLead);
+      }
+    });
+    
+    setNewRecords(validNew);
+    setDuplicates(dups);
+    setErrorsList(errs);
+    setStep(3);
+  };
+
+  const finalImport = () => {
+    let finalLeadsToAdd = [...newRecords];
+    
+    if (duplicateAction === 'new') {
+      duplicates.forEach(d => finalLeadsToAdd.push(d.imported));
+    } else if (duplicateAction === 'update') {
+      setLeads(prev => {
+        const updatedPrev = prev.map(l => {
+          const dup = duplicates.find(d => d.existing.id === l.id);
+          if (dup) {
+            return { 
+              ...l, 
+              ...dup.imported, 
+              id: l.id, 
+              createdAt: l.createdAt, 
+              activities: l.activities,
+              updatedAt: Date.now() 
+            };
+          }
+          return l;
+        });
+        return [...updatedPrev, ...finalLeadsToAdd];
+      });
+      toast(`Import complete! Added ${newRecords.length} new, updated ${duplicates.length} existing.`);
+      onClose();
+      return;
+    }
+    
+    setLeads(prev => [...prev, ...finalLeadsToAdd]);
+    toast(`Import complete! Added ${finalLeadsToAdd.length} records.`);
+    onClose();
+  };
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-800">Import Deals</h2>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      {step === 1 && (
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Select Target Pipeline</label>
+            <select value={targetPipelineId} onChange={e => { setTargetPipelineId(e.target.value); setDefaultStageId(''); }} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white">
+              {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Default Stage (if not in file)</label>
+            <select value={defaultStageId} onChange={e => setDefaultStageId(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white">
+              <option value="">-- Select Stage --</option>
+              {pipelines.find(p => p.id === targetPipelineId)?.stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </div>
+          <div className="bg-gray-50 p-6 rounded-xl border-2 border-dashed border-gray-200 text-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+            <i className="fa-solid fa-cloud-arrow-up text-4xl text-gray-400 mb-3"></i>
+            <p className="text-sm font-medium text-gray-600">Click to upload CSV or Excel</p>
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv,.xlsx,.xls" className="hidden" />
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-gray-700">Map Fields</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border border-gray-100 rounded-lg">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="p-2 text-left text-xs text-gray-500">Uploaded Column</th>
+                  <th className="p-2 text-left text-xs text-gray-500">NexaCRM Field</th>
+                </tr>
+              </thead>
+              <tbody>
+                {headers.map(h => (
+                  <tr key={h} className="border-t border-gray-100">
+                    <td className="p-2 font-medium text-gray-700">{h}</td>
+                    <td className="p-2">
+                      <select value={mapping[h] || ''} onChange={e => setMapping(prev => ({ ...prev, [h]: e.target.value }))} className="w-full border border-gray-200 rounded px-2 py-1 text-xs bg-white">
+                        <option value="">-- Ignore --</option>
+                        <option value="name">Name</option>
+                        <option value="phone">Phone</option>
+                        <option value="email">Email</option>
+                        <option value="company">Company</option>
+                        <option value="budget">Budget</option>
+                        <option value="stage">Stage</option>
+                        <option value="source">Source</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button onClick={analyzeImport} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600">Analyze & Preview Import</button>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-4 gap-3">
+            <div className="bg-gray-50 p-3 rounded-lg text-center"><div className="text-2xl font-bold text-gray-800">{fileData.length}</div><div className="text-xs text-gray-500">Total</div></div>
+            <div className="bg-green-50 p-3 rounded-lg text-center"><div className="text-2xl font-bold text-green-600">{newRecords.length}</div><div className="text-xs text-green-600">New</div></div>
+            <div className="bg-amber-50 p-3 rounded-lg text-center"><div className="text-2xl font-bold text-amber-600">{duplicates.length}</div><div className="text-xs text-amber-600">Duplicates</div></div>
+            <div className="bg-red-50 p-3 rounded-lg text-center"><div className="text-2xl font-bold text-red-600">{errorsList.length}</div><div className="text-xs text-red-600">Errors</div></div>
+          </div>
+          
+          {errorsList.length > 0 && (
+            <div className="bg-red-50 p-3 rounded-lg max-h-32 overflow-y-auto">
+              <h4 className="text-xs font-semibold text-red-700 mb-2">Error Details:</h4>
+              <ul className="text-xs text-red-600 space-y-1">{errorsList.map((err, i) => <li key={i}>{err}</li>)}</ul>
+            </div>
+          )}
+
+          {duplicates.length > 0 && (
+            <div className="bg-amber-50 p-4 rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-amber-800">Potential Duplicates Found</h4>
+                <select value={duplicateAction} onChange={e => setDuplicateAction(e.target.value)} className="text-xs border border-amber-300 rounded-lg px-2 py-1 bg-white">
+                  <option value="skip">Skip All</option>
+                  <option value="new">Import All as New</option>
+                  <option value="update">Update Existing</option>
+                </select>
+              </div>
+              <div className="max-h-48 overflow-y-auto space-y-2">
+                {duplicates.map((d, i) => (
+                  <div key={i} className="bg-white p-2 rounded-md border border-amber-100 text-xs grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="font-bold text-gray-600">Imported:</span><br/>
+                      <span className="text-gray-700">{d.imported.name}</span><br/>
+                      <span className="text-gray-500">{d.imported.email} | {d.imported.phone}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-600">Existing:</span><br/>
+                      <span className="text-gray-700">{d.existing.name}</span><br/>
+                      <span className="text-gray-500">{d.existing.email} | {d.existing.phone}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={() => setStep(2)} className="flex-1 bg-gray-100 text-gray-600 py-3 rounded-xl font-medium text-sm hover:bg-gray-200">Back</button>
+            <button onClick={finalImport} className="flex-1 bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600">
+              Complete Import ({newRecords.length + (duplicateAction === 'new' ? duplicates.length : 0)})
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CreateLeadModal({ defaultPipelineId }) { 
+  const { setLeads, toast, setModalContent, allStages, pipelines } = useApp(); 
+  const initialStage = pipelines.find(p => p.id === defaultPipelineId)?.stages[0]?.id || 'new';
+  const [form, setForm] = useState({ name: '', phone: '', email: '', company: '', interest: '', budget: '', timeline: '', source: 'WhatsApp', stage: initialStage }); 
+  const create = () => { 
+    if (!form.name.trim() || !form.phone.trim()) { toast('Name and phone required', 'error'); return; } 
+    setLeads(prev => [...prev, { ...form, id: genId(), assignedTo: 'u1', createdAt: Date.now(), updatedAt: Date.now(), notes: '', activities: [{ type: 'note', text: 'Created manually', at: Date.now() }] }]); 
+    toast('Lead created'); setModalContent(null); 
+  }; 
+  const set = (k, v) => setForm(prev => ({ ...prev, [k]: v })); 
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-800">Add Lead</h2>
+        <button onClick={() => setModalContent(null)} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="col-span-2"><label className="text-xs font-medium text-gray-500 mb-1 block">Name *</label><input value={form.name} onChange={e => set('name', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Phone *</label><input value={form.phone} onChange={e => set('phone', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Email</label><input value={form.email} onChange={e => set('email', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Company</label><input value={form.company} onChange={e => set('company', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Interest</label><input value={form.interest} onChange={e => set('interest', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Budget</label><input value={form.budget} onChange={e => set('budget', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Source</label><select value={form.source} onChange={e => set('source', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white">{['WhatsApp', 'Website', 'Referral', 'LinkedIn', 'Other'].map(s => <option key={s}>{s}</option>)}</select></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Stage</label><select value={form.stage} onChange={e => set('stage', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white">{allStages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+      </div>
+      <button onClick={create} className="w-full mt-6 bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600">Create</button>
+    </div>
+  ); 
+}
+
+function LeadDetail({ leadId }) {
+  const { leads, setLeads, toast, setModalContent, navigate, allStages, pipelines, transitionLead, currentUser, setWhatsappTarget } = useApp();
+  const lead = leads.find(l => l.id === leadId);
+  const [comment, setComment] = useState('');
+  const [editNotes, setEditNotes] = useState(lead ? lead.notes : '');
+  const [showNotes, setShowNotes] = useState(false);
+  const scrollRef = useRef(null);
+  const waConfig = getStore('whatsappConfig', { instanceId: '', token: '' });
+  const [waMessages, setWaMessages] = useState([]);
+  const [waInput, setWaInput] = useState('');
+  const waPollRef = useRef(null);
+  const activities = lead ? (lead.activities || []) : [];
+
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [activities.length]);
+  useEffect(() => { if (lead) setEditNotes(lead.notes); }, [leadId, lead]);
+
+  useEffect(() => {
+    if (!lead?.phone || !waConfig.instanceId) return;
+    const fetchLeadWaMessages = async () => {
+      const chatId = getChatId(lead.phone);
+      try {
+        const res = await fetch(`https://api.ultramsg.com/${waConfig.instanceId}/chats/messages?token=${waConfig.token}&chatId=${chatId}&limit=100`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const sorted = data.sort((a, b) => a.time - b.time);
+          setWaMessages(sorted);
+          const lastLoggedId = lead.lastWaId || "";
+          const newIncoming = sorted.filter(m => !parseIsMe(m) && String(m.id) > String(lastLoggedId));
+          if (newIncoming.length > 0) {
+            const latestId = newIncoming[newIncoming.length - 1].id;
+            setLeads(prev => prev.map(l => {
+              if (l.id === leadId) {
+                const newActivities = newIncoming.map(m => ({ type: 'whatsapp', text: `Customer replied: ${m.text || m.body || ''}`, at: Date.now(), author: l.name }));
+                return { ...l, activities: [...(l.activities || []), ...newActivities], lastWaId: latestId };
+              }
+              return l;
+            }));
+          }
+        }
+      } catch (e) { console.error("WA fetch error", e); }
+    };
+    fetchLeadWaMessages(); 
+    waPollRef.current = setInterval(fetchLeadWaMessages, 3000); 
+    return () => clearInterval(waPollRef.current);
+  }, [leadId, lead?.phone, waConfig.instanceId, waConfig.token, setLeads]);
+
+  if (!lead) return null;
+
+  const addComment = () => { if (!comment.trim()) return; setLeads(prev => prev.map(l => l.id === leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'note', text: comment.trim(), at: Date.now(), author: currentUser?.name || 'Admin User' }] } : l)); setComment(''); };
+  const moveStage = (stageId) => { transitionLead(leadId, stageId); toast('Stage updated'); };
+  const saveNotes = () => { setLeads(prev => prev.map(l => l.id === leadId ? { ...l, notes: editNotes } : l)); toast('Notes saved'); setShowNotes(false); };
+  const fmtFullDate = ts => { const d = new Date(ts); return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) + ' at ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); };
+  const handleWhatsAppClick = () => { if (!lead.phone) return toast('No phone number available', 'error'); setWhatsappTarget(lead.id); setModalContent(null); navigate('whatsapp'); toast('Opening WhatsApp chat...'); };
+
+  const handleLeadWaSend = async () => {
+    if (!waInput.trim() || !lead.phone) { if (!lead.phone) toast('No phone number for this lead', 'error'); return; }
+    if (!waConfig.instanceId || !waConfig.token) { toast('WhatsApp API not connected. Go to WhatsApp tab.', 'error'); return; }
+    const chatId = getChatId(lead.phone);
+    const msgText = waInput;
+    setWaInput('');
+    try {
+      const res = await fetch(`https://api.ultramsg.com/${waConfig.instanceId}/messages/chat`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: waConfig.token, to: chatId, body: msgText })
+      });
+      const data = await res.json();
+      if (data === true || data.sent === true || data.sent === 'true') {
+        setWaMessages(prev => [...prev, { from: 'me', text: msgText, time: Math.floor(Date.now()/1000) }]);
+        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'whatsapp', text: `You sent: ${msgText}`, at: Date.now(), author: currentUser?.name || 'System' }] } : l));
+        toast('Message sent!');
+      } else { toast('Failed to send via WhatsApp: ' + (data.error || ''), 'error'); }
+    } catch (e) { toast('Network error sending message', 'error'); }
+  };
+
+  return (
+    <div className="p-0 flex" style={{ minHeight: '70vh' }}>
+      <div className="w-[340px] shrink-0 border-r border-gray-100 overflow-y-auto p-6" style={{ maxHeight: '85vh' }}>
+        <div className="flex items-center gap-3 mb-6"><div className="w-12 h-12 rounded-2xl bg-brand-50 flex items-center justify-center text-lg font-bold text-brand-600">{lead.name.split(' ').map(n => n[0]).join('')}</div><div className="min-w-0 flex-1"><div className="text-base font-bold text-gray-800 truncate">{lead.name}</div><div className="text-xs text-gray-400 truncate">{lead.company || 'No company'}</div></div></div>
+        <div className="mb-5"><div className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Stage</div><div className="flex flex-col gap-2">{pipelines.map(p => (<div key={p.id}><div className="text-[10px] text-gray-400 mb-1">{p.name}</div><div className="flex flex-wrap gap-1.5">{p.stages.map(s => (<button key={s.id} onClick={() => moveStage(s.id)} className={"px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all " + (lead.stage === s.id ? 'border-transparent text-white shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300')} style={lead.stage === s.id ? { background: s.color } : {}}>{s.label}</button>))}</div></div>))}</div></div>
+        <div className="space-y-3 mb-5">
+          {[
+            ['Phone', lead.phone, 'fa-solid fa-phone', 'text-blue-500'], 
+            ['Email', lead.email || '—', 'fa-solid fa-envelope', 'text-purple-500'], 
+            ['Interest', lead.interest || '—', 'fa-solid fa-tag', 'text-amber-500'], 
+            ['Budget', lead.budget || '—', 'fa-solid fa-indian-rupee-sign', 'text-emerald-500'], 
+            ['Timeline', lead.timeline || '—', 'fa-solid fa-clock', 'text-gray-500'], 
+            ['Source', lead.source || '—', 'fa-solid fa-link', 'text-gray-500']
+          ].map(([label, val, icon, iconColor]) => (
+            <div key={label} className="flex items-start gap-2.5">
+              <i className={`${icon} ${iconColor} text-xs mt-1 w-4 text-center`}></i>
+              <div className="flex items-center gap-2">
+                <div><div className="text-[10px] text-gray-400 font-medium">{label}</div><div className="text-xs text-gray-700">{val || '—'}</div></div>
+                {label === 'Phone' && lead.phone && (<button onClick={handleWhatsAppClick} className="text-green-500 hover:text-green-600 mt-0.5" title="Chat on WhatsApp"><i className="fa-brands fa-whatsapp text-sm"></i></button>)}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 border-t border-gray-100 pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase">WhatsApp Chat</div>
+            {waConfig.instanceId ? <span className="text-[9px] text-green-500 font-medium">Connected</span> : <button onClick={() => { setModalContent(null); navigate('whatsapp'); }} className="text-[9px] text-brand-500 font-medium">Connect API</button>}
+          </div>
+          <div className="bg-[#e5ddd5] rounded-xl border border-gray-200 h-48 overflow-y-auto p-3 space-y-3 flex flex-col">
+            {waMessages.length === 0 && <div className="text-center text-xs text-gray-500 self-center">No messages yet. Start the conversation!</div>}
+            {waMessages.map((m, i) => {
+              const isMe = parseIsMe(m);
+              const text = m.text || m.body || m.message || '';
+              const timeStr = formatMsgTime(m.time);
+              const senderLabel = isMe ? `AGENT - ${currentUser?.name || 'Admin'}` : `CUSTOMER - ${lead.name || 'Unknown'}`;
+              const senderColor = isMe ? 'text-green-600' : 'text-gray-500';
+              return (
+                <div key={m.id || i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div className={`text-[10px] mb-0.5 px-2 font-bold uppercase tracking-wide ${senderColor}`}>{senderLabel}</div>
+                  <div className={`max-w-[75%] px-3 py-2 text-xs shadow-sm ${isMe ? 'bg-[#d9fdd3] text-gray-800 rounded-lg rounded-tr-none' : 'bg-white text-gray-800 rounded-lg rounded-tl-none'}`}>
+                    {text}<div className="text-[9px] text-gray-500 mt-0.5 text-right">{timeStr}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 mt-2">
+            <input value={waInput} onChange={e => setWaInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLeadWaSend()} placeholder="Type WhatsApp message..." className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs" />
+            <button onClick={handleLeadWaSend} className="bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1"><i className="fa-solid fa-paper-plane text-[10px]"></i></button>
+          </div>
+        </div>
+        <div className="mb-4 mt-6"><button onClick={() => setShowNotes(!showNotes)} className="text-xs font-medium text-gray-500 hover:text-gray-700 flex items-center gap-1.5"><i className={"fa-solid fa-chevron-" + (showNotes ? 'up' : 'down') + " text-[10px]"}></i>Internal Notes</button>{showNotes && (<div className="mt-2"><textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs resize-none h-20" placeholder="Add internal notes..." /><button onClick={saveNotes} className="mt-1.5 bg-brand-500 text-white px-3 py-1.5 rounded-lg text-[11px] font-medium">Save</button></div>)}</div>
+        <div className="pt-4 border-t border-gray-100 space-y-2">
+          <button onClick={() => { setModalContent(null); navigate('email'); }} className="w-full bg-purple-50 text-purple-600 hover:bg-purple-100 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2"><i className="fa-solid fa-envelope"></i>Send Email</button>
+          <button onClick={handleWhatsAppClick} className="w-full bg-green-50 text-green-600 hover:bg-green-100 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2"><i className="fa-brands fa-whatsapp"></i>Open WhatsApp Chat</button>
+          <button onClick={() => { setModalContent(null); navigate('calls'); }} className="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2"><i className="fa-solid fa-phone"></i>Call</button>
+        </div>
+      </div>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="px-6 py-3 border-b border-gray-100 flex items-center justify-between shrink-0"><div className="flex items-center gap-2"><i className="fa-solid fa-comments text-brand-500"></i><span className="text-sm font-semibold text-gray-800">Comments & Activity</span><span className="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded-full">{activities.length}</span></div></div>
+        <div className="px-6 py-3 border-b border-gray-50 shrink-0 bg-gray-50/50"><div className="flex gap-3"><div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-bold text-brand-600 shrink-0">A</div><div className="flex-1"><textarea value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(); } }} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:bg-white transition-colors" rows={2} placeholder="Add a comment..." /><div className="flex items-center justify-between mt-2"><div className="flex gap-1">{[{ icon: 'fa-solid fa-phone', label: 'Log Call', color: 'text-blue-500', bg: 'hover:bg-blue-50', fn: () => { setLeads(prev => prev.map(l => l.id === leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'call', text: 'Call logged', at: Date.now(), author: currentUser?.name || 'Admin User' }] } : l)); toast('Call logged'); } }, { icon: 'fa-solid fa-envelope', label: 'Log Email', color: 'text-purple-500', bg: 'hover:bg-purple-50', fn: () => { setLeads(prev => prev.map(l => l.id === leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'email', text: 'Email logged', at: Date.now(), author: currentUser?.name || 'Admin User' }] } : l)); toast('Email logged'); } }, { icon: 'fa-solid fa-calendar', label: 'Log Meeting', color: 'text-orange-500', bg: 'hover:bg-orange-50', fn: () => { setLeads(prev => prev.map(l => l.id === leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'meeting', text: 'Meeting logged', at: Date.now(), author: currentUser?.name || 'Admin User' }] } : l)); toast('Meeting logged'); } }].map(b => (<button key={b.label} onClick={b.fn} className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${b.color} ${b.bg} transition-all flex items-center gap-1`}><i className={b.icon}></i>{b.label}</button>))}</div><button onClick={addComment} disabled={!comment.trim()} className="bg-brand-500 hover:bg-brand-600 disabled:bg-gray-200 disabled:text-gray-400 text-white px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all"><i className="fa-solid fa-paper-plane text-[10px]"></i>Send</button></div></div></div></div>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
+          {activities.length === 0 && <div className="text-center py-12 text-gray-400"><i className="fa-regular fa-comment-dots text-3xl mb-3 block text-gray-300"></i><p className="text-sm">No comments yet. Start the conversation!</p></div>}
+          <div className="space-y-0">{activities.slice().reverse().map((act, idx) => { const isLast = idx === 0; const typeIcon = ACT_ICONS[act.type] || 'fa-solid fa-circle text-gray-400'; const typeColor = ACT_COLORS[act.type] || 'bg-gray-100 text-gray-400'; const isComment = act.type === 'note'; return (<div key={idx} className="flex gap-3 relative"><div className="flex flex-col items-center shrink-0"><div className={"w-8 h-8 rounded-full " + typeColor + " flex items-center justify-center text-xs z-10"}><i className={typeIcon}></i></div>{!isLast && <div className="w-px flex-1 bg-gray-200 min-h-[24px]"></div>}</div><div className={"pb-4 flex-1 min-w-0"}><div className="flex items-center gap-2 mb-1"><span className="text-xs font-semibold text-gray-700">{act.author || 'System'}</span><span className="text-[10px] text-gray-400">{fmtFullDate(act.at)}</span>{act.type !== 'note' && act.type !== 'stage' && <span className={"px-1.5 py-0.5 rounded text-[9px] font-medium " + typeColor}>{act.type}</span>}</div>{isComment ? (<div className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">{act.text}</div>) : act.type === 'stage' ? (<div className="text-xs text-indigo-600 font-medium flex items-center gap-1"><i className="fa-solid fa-arrow-right text-[10px]"></i>{act.text}</div>) : (<div className="text-xs text-gray-600">{act.text}</div>)}</div></div>); })}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PipelinesView() {
+  const { pipelines, setPipelines, tunnels, setTunnels, toast } = useApp();
+  const [editMode, setEditMode] = useState(false);
+  const [showTunnelForm, setShowTunnelForm] = useState(null);
+  const updatePipelineName = (pId, name) => setPipelines(prev => prev.map(p => p.id === pId ? { ...p, name } : p));
+  const updateStage = (pId, sId, data) => setPipelines(prev => prev.map(p => p.id === pId ? { ...p, stages: p.stages.map(s => s.id === sId ? { ...s, ...data } : s) } : p));
+  const addPipeline = () => setPipelines(prev => [...prev, { id: genId(), name: 'New Pipeline', stages: [{ id: genId(), label: 'Stage 1', color: '#818CF8', bg: '#EEF2FF' }] }]);
+  const addStage = (pId) => setPipelines(prev => prev.map(p => p.id === pId ? { ...p, stages: [...p.stages, { id: genId(), label: 'New Stage', color: '#CBD5E1', bg: '#F1F5F9' }] } : p));
+  const deletePipeline = (pId) => { setPipelines(prev => prev.filter(p => p.id !== pId)); setTunnels(prev => prev.filter(t => t.toPipelineId !== pId && !pipelines.find(p => p.id === pId)?.stages.some(s => s.id === t.fromStageId))); toast('Pipeline deleted', 'info'); };
+  const deleteStage = (pId, sId) => { setPipelines(prev => prev.map(p => p.id === pId ? { ...p, stages: p.stages.filter(s => s.id !== sId) } : p)); setTunnels(prev => prev.filter(t => t.fromStageId !== sId && t.toStageId !== sId)); toast('Stage deleted', 'info'); };
+  const saveTunnel = (fromStageId, toPipelineId, toStageId, action) => { setTunnels(prev => [...prev, { id: genId(), fromStageId, toPipelineId, toStageId, action }]); toast('Tunnel created'); setShowTunnelForm(null); };
+  const deleteTunnel = (tId) => { setTunnels(prev => prev.filter(t => t.id !== tId)); toast('Tunnel deleted', 'info'); };
+
+  return (
+    <div className="fade-in">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3"><button onClick={() => setEditMode(!editMode)} className={`px-4 py-2 rounded-lg text-sm font-medium ${editMode ? 'bg-brand-500 text-white' : 'bg-white border border-gray-200 text-gray-600'}`}><i className="fa-solid fa-pen mr-1.5"></i>{editMode ? 'Done Editing' : 'Edit Pipelines'}</button></div>
+        {editMode && <button onClick={addPipeline} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Add Pipeline</button>}
+      </div>
+      <div className="flex gap-6 overflow-x-auto pb-8 relative">
+        {pipelines.map(p => (
+          <div key={p.id} className="pipeline-col bg-gray-50 rounded-2xl p-4 border border-gray-100 shrink-0 relative">
+            <div className="mb-4 pb-3 border-b border-gray-200 flex items-center justify-between">
+              {editMode ? <input value={p.name} onChange={e => updatePipelineName(p.id, e.target.value)} className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold w-full" /> : <h3 className="font-bold text-gray-800 text-sm">{p.name}</h3>}
+              {editMode && <button onClick={() => deletePipeline(p.id)} className="text-gray-400 hover:text-red-500 ml-2"><i className="fa-solid fa-trash-can text-xs"></i></button>}
+            </div>
+            <div className="space-y-2">
+              {p.stages.map(s => (
+                <div key={s.id} className="relative">
+                  <div className="p-3 rounded-lg text-white font-medium text-sm flex items-center justify-between" style={{ background: s.color }}>
+                    {editMode ? (<div className="flex items-center gap-2 w-full"><input type="color" value={s.color} onChange={e => updateStage(p.id, s.id, { color: e.target.value, bg: e.target.value + '20' })} className="w-6 h-6 rounded cursor-pointer bg-transparent border-none p-0" /><input value={s.label} onChange={e => updateStage(p.id, s.id, { label: e.target.value })} className="bg-white/20 px-2 py-1 rounded text-white w-full text-xs" /><button onClick={() => deleteStage(p.id, s.id)} className="text-white/80 hover:text-white"><i className="fa-solid fa-times"></i></button></div>) : (<span className="text-xs">{s.label} {s.type && <span className="ml-1 text-[9px] uppercase opacity-80">({s.type})</span>}</span>)}
+                  </div>
+                  {tunnels.filter(t => t.fromStageId === s.id).map(t => {
+                    const targetP = pipelines.find(pp => pp.id === t.toPipelineId);
+                    const targetS = targetP?.stages.find(ss => ss.id === t.toStageId);
+                    return (<div key={t.id} className="mt-1 ml-2 pl-2 border-l-2 border-brand-500 text-[10px] text-gray-500 flex items-center gap-1"><i className="fa-solid fa-arrow-right text-brand-500"></i><span className="font-medium text-brand-600">{t.action}</span> to {targetP?.name || 'Unknown'} &rarr; {targetS?.label || 'Unknown'}{editMode && <button onClick={() => deleteTunnel(t.id)} className="text-red-400 hover:text-red-600 ml-1"><i className="fa-solid fa-times"></i></button>}</div>);
+                  })}
+                  {editMode && <button onClick={() => setShowTunnelForm({ fromStageId: s.id, fromPipelineId: p.id })} className="mt-1 ml-2 text-[10px] text-gray-400 hover:text-brand-500 flex items-center gap-1"><i className="fa-solid fa-plus"></i>Add Tunnel</button>}
+                </div>
+              ))}
+            </div>
+            {editMode && <button onClick={() => addStage(p.id)} className="mt-4 w-full text-xs text-gray-400 hover:text-brand-500 border-2 border-dashed border-gray-200 rounded-lg py-2">+ Add Stage</button>}
+          </div>
+        ))}
+      </div>
+      {showTunnelForm && <TunnelFormModal onClose={() => setShowTunnelForm(null)} onSave={saveTunnel} fromStageId={showTunnelForm.fromStageId} fromPipelineId={showTunnelForm.fromPipelineId} />}
+    </div>
+  );
+}
+
+function TunnelFormModal({ onClose, onSave, fromStageId, fromPipelineId }) {
+  const { pipelines, allStages } = useApp();
+  const [toPipelineId, setToPipelineId] = useState('');
+  const [toStageId, setToStageId] = useState('');
+  const [action, setAction] = useState('move');
+  const fromStage = allStages.find(s => s.id === fromStageId);
+  const handleSave = () => { if (!toPipelineId || !toStageId) { return; } onSave(fromStageId, toPipelineId, toStageId, action); };
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 fade-in" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-bold text-gray-800">Create Tunnel</h2><button onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button></div>
+        <div className="space-y-4">
+          <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600">From Stage: <b className="text-gray-800">{fromStage?.label || 'Unknown'}</b></div>
+          <div><label className="text-xs font-medium text-gray-500 mb-1 block">Target Pipeline</label><select value={toPipelineId} onChange={e => { setToPipelineId(e.target.value); setToStageId(''); }} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white"><option value="">Select Pipeline</option>{pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+          {toPipelineId && (<div><label className="text-xs font-medium text-gray-500 mb-1 block">Target Stage</label><select value={toStageId} onChange={e => setToStageId(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white"><option value="">Select Stage</option>{pipelines.find(p => p.id === toPipelineId)?.stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>)}
+          <div><label className="text-xs font-medium text-gray-500 mb-1 block">Action</label><div className="flex gap-2"><button onClick={() => setAction('move')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${action === 'move' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}>Move Lead</button><button onClick={() => setAction('copy')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${action === 'copy' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}>Copy Lead</button></div></div>
+          <button onClick={handleSave} disabled={!toStageId} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600 disabled:bg-gray-200">Create Tunnel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WhatsAppView() {
+  const { toast, leads, setLeads, currentUser, whatsappTarget, setWhatsappTarget } = useApp();
+  const [config, setConfig] = useState(() => getStore('whatsappConfig', { instanceId: '', token: '' }));
+  const [showSettings, setShowSettings] = useState(false);
+  const [activeLeadId, setActiveLeadId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [inputMsg, setInputMsg] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const saveConfig = () => { setStore('whatsappConfig', config); toast('Settings saved!'); setShowSettings(false); };
+  const accessibleLeads = useMemo(() => { return leads.filter(l => l.phone && (currentUser?.role === 'Admin' || l.assignedTo === currentUser?.id)); }, [leads, currentUser]);
+  const activeLead = accessibleLeads.find(l => l.id === activeLeadId);
+
+  useEffect(() => { if (whatsappTarget) { setActiveLeadId(whatsappTarget); setWhatsappTarget(null); } }, [whatsappTarget, setWhatsappTarget]);
+
+  const fetchMessages = async () => {
+    if (!config.instanceId || !config.token || !activeLead) return;
+    const chatId = getChatId(activeLead.phone);
+    if (!chatId) return;
+    try {
+      const res = await fetch(`https://api.ultramsg.com/${config.instanceId}/chats/messages?token=${config.token}&chatId=${chatId}&limit=100`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const sorted = data.sort((a, b) => a.time - b.time);
+        setMessages(sorted);
+        const lastLoggedId = activeLead.lastWaId || "";
+        const newIncoming = sorted.filter(m => !parseIsMe(m) && String(m.id) > String(lastLoggedId));
+        if (newIncoming.length > 0) {
+          const latestId = newIncoming[newIncoming.length - 1].id;
+          setLeads(prev => prev.map(l => {
+            if (l.id === activeLead.id) {
+              const newActivities = newIncoming.map(m => ({ type: 'whatsapp', text: `Customer replied: ${m.text || m.body || ''}`, at: Date.now(), author: activeLead.name }));
+              return { ...l, activities: [...(l.activities || []), ...newActivities], lastWaId: latestId };
+            }
+            return l;
+          }));
+        }
+      } else { console.error("UltraMsg API returned non-array for messages:", data); }
+    } catch (e) { console.error("Failed to fetch messages", e); }
+  };
+
+  useEffect(() => {
+    if (activeLead) {
+      fetchMessages();
+      const msgPoll = setInterval(fetchMessages, 3000);
+      return () => clearInterval(msgPoll);
+    } else { setMessages([]); }
+  }, [activeLead]);
+
+  const handleSend = async () => {
+    if (!inputMsg.trim() || !activeLead) return;
+    const chatId = getChatId(activeLead.phone);
+    const msgText = inputMsg;
+    setInputMsg('');
+    setSending(true);
+    try {
+      const res = await fetch(`https://api.ultramsg.com/${config.instanceId}/messages/chat`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: config.token, to: chatId, body: msgText })
+      });
+      const data = await res.json();
+      if (data === true || data.sent === true || data.sent === 'true') {
+        setMessages(prev => [...prev, { from: 'me', text: msgText, time: Math.floor(Date.now()/1000) }]);
+        setLeads(prev => prev.map(l => l.id === activeLead.id ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'whatsapp', text: `You sent: ${msgText}`, at: Date.now(), author: currentUser?.name || 'System' }] } : l));
+        toast('Message sent!');
+      } else { toast('Failed to send: ' + (data.error || 'Unknown error'), 'error'); }
+    } catch (e) { toast('Failed to send message', 'error'); }
+    setSending(false);
+  };
+
+  return (
+    <>
+      {!config.instanceId || !config.token ? (
+        <div className="fade-in flex h-full items-center justify-center bg-gray-50">
+          <div className="text-center bg-white p-8 rounded-2xl shadow-sm border border-gray-100 max-w-md">
+            <i className="fa-brands fa-whatsapp text-6xl text-green-500 mb-4"></i>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Connect WhatsApp</h3>
+            <p className="text-sm text-gray-500 mb-6">To send and receive messages directly inside the CRM, connect your normal WhatsApp account via UltraMsg.</p>
+            <button onClick={() => setShowSettings(true)} className="bg-brand-500 hover:bg-brand-600 text-white px-6 py-3 rounded-xl font-medium text-sm">Connect API</button>
+          </div>
+        </div>
+      ) : (
+        <div className="fade-in flex h-[calc(100vh-3.5rem)] -m-6">
+          <div className="w-80 shrink-0 bg-white border-r border-gray-100 flex flex-col">
+            <div className="p-3 border-b border-gray-100 flex items-center justify-between"><span className="text-sm font-semibold text-gray-800 px-4">CRM Contacts</span><button onClick={() => setShowSettings(true)} className="text-gray-400 hover:text-gray-600 px-3"><i className="fa-solid fa-gear text-xs"></i></button></div>
+            <div className="flex-1 overflow-y-auto">
+              {accessibleLeads.length === 0 && <div className="p-5 text-center text-gray-400 text-xs">No leads with phone numbers found.</div>}
+              {accessibleLeads.map(l => (
+                <div key={l.id} onClick={() => setActiveLeadId(l.id)} className={"px-4 py-3 cursor-pointer border-b border-gray-50 transition-all " + (activeLeadId === l.id ? 'bg-brand-50 border-l-2 border-l-brand-500' : 'hover:bg-gray-50')}>
+                  <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-500">{l.name ? l.name.charAt(0) : '?'}</div><div className="flex-1 min-w-0"><div className="text-sm font-semibold text-gray-800 truncate">{l.name}</div><div className="text-xs text-gray-400 truncate">{l.phone}</div></div></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col bg-gray-50">
+            {activeLead ? (
+              <>
+                <div className="h-14 bg-white border-b border-gray-100 flex items-center px-5 gap-4 shrink-0"><div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-500">{activeLead.name ? activeLead.name.charAt(0) : '?'}</div><div><div className="text-sm font-semibold text-gray-800">{activeLead.name}</div><div className="text-xs text-gray-400">{activeLead.phone}</div></div></div>
+                <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-[#e5ddd5]">
+                  {messages.map((m, i) => {
+                    const isMe = parseIsMe(m);
+                    const text = m.text || m.body || m.message || '';
+                    const timeStr = formatMsgTime(m.time);
+                    const senderLabel = isMe ? `AGENT - ${currentUser?.name || 'Admin'}` : `CUSTOMER - ${activeLead.name || 'Unknown'}`;
+                    const senderColor = isMe ? 'text-green-600' : 'text-gray-500';
+                    return (
+                      <div key={m.id || i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                        <div className={`text-[10px] mb-0.5 px-2 font-bold uppercase tracking-wide ${senderColor}`}>{senderLabel}</div>
+                        <div className={`max-w-[70%] px-4 py-2.5 text-sm shadow-sm ${isMe ? 'bg-[#d9fdd3] text-gray-800 rounded-lg rounded-tr-none' : 'bg-white text-gray-800 rounded-lg rounded-tl-none'}`}>{text}<div className="text-[10px] text-gray-500 mt-1 text-right">{timeStr}</div></div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="p-4 bg-white border-t border-gray-100">
+                  <div className="flex gap-2"><input value={inputMsg} onChange={e => setInputMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="Type a message..." className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /><button onClick={handleSend} disabled={sending} className="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2">{sending ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>}</button></div>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-gray-400"><div className="text-center"><i className="fa-brands fa-whatsapp text-5xl mb-3 text-gray-300"></i><p className="text-sm">Select a Lead to start messaging</p></div></div>
+            )}
+          </div>
+        </div>
+      )}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setShowSettings(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-bold text-gray-800">WhatsApp API Settings</h2><button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button></div>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700"><p className="font-bold mb-1">How to get credentials:</p><p>1. Go to UltraMsg.com and scan the QR code with your WhatsApp.</p><p>2. Copy your Instance ID and Token here.</p></div>
+              <div><label className="text-xs font-medium text-gray-500 mb-1 block">Instance ID</label><input value={config.instanceId} onChange={e => setConfig({...config, instanceId: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="e.g. instance12345" /></div>
+              <div><label className="text-xs font-medium text-gray-500 mb-1 block">Token</label><input value={config.token} onChange={e => setConfig({...config, token: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="your-api-token" /></div>
+              <button onClick={saveConfig} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600">Save & Connect</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function VoiceCallsView() { const { calls, setCalls, leads, toast } = useApp(); const [dialNumber, setDialNumber] = useState(''); const [calling, setCalling] = useState(false); const [callTimer, setCallTimer] = useState(0); const [callActive, setCallActive] = useState(false); const timerRef = useRef(null); useEffect(() => { if (callActive) timerRef.current = setInterval(() => setCallTimer(p => p + 1), 1000); else clearInterval(timerRef.current); return () => clearInterval(timerRef.current) }, [callActive]); const startCall = () => { if (!dialNumber.trim()) { toast('Enter a number', 'error'); return; } setCalling(true); setCallTimer(0); setTimeout(() => { setCallActive(true); toast('Connected'); }, 1500) }; const endCall = () => { setCallActive(false); setCalling(false); if (callTimer > 0) { const lead = leads.find(l => l.phone === dialNumber); setCalls(prev => [...prev, { id: genId(), leadId: lead ? lead.id : null, contactName: lead ? lead.name : 'Unknown', contactPhone: dialNumber, type: 'outgoing', duration: callTimer, recorded: false, status: 'completed', startedAt: Date.now() - callTimer * 1000, endedAt: Date.now() }]); toast('Call ended · ' + fmtDur(callTimer)); } setDialNumber(''); setCallTimer(0); }; const dialPad = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['*', '0', '#']]; return (<div className="fade-in grid grid-cols-1 lg:grid-cols-2 gap-6"><div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm"><h3 className="text-sm font-semibold text-gray-800 mb-5">Dial Pad</h3><div className="max-w-xs mx-auto"><div className="bg-gray-50 rounded-xl px-4 py-3 mb-5 text-center"><span className="text-2xl font-light text-gray-800 tracking-wider">{dialNumber || 'Enter number'}</span></div><div className="grid grid-cols-3 gap-3 mb-5">{dialPad.flat().map(d => <button key={d} onClick={() => setDialNumber(p => p + d)} className="dial-btn bg-gray-50 hover:bg-gray-100 text-gray-700 mx-auto">{d}</button>)}</div><div className="flex gap-3 justify-center"><button onClick={dialNumber ? () => setDialNumber(p => p.slice(0, -1)) : undefined} className="dial-btn bg-gray-50 hover:bg-gray-100 text-gray-400 text-lg"><i className="fa-solid fa-delete-left"></i></button>{!calling ? <button onClick={startCall} className="dial-btn bg-brand-500 hover:bg-brand-600 text-white text-lg"><i className="fa-solid fa-phone"></i></button> : <button onClick={endCall} className="dial-btn bg-red-500 hover:bg-red-600 text-white text-lg"><i className="fa-solid fa-phone-slash"></i></button>}</div>{calling && <div className="mt-5 text-center"><div className="text-xs text-gray-400 mb-1">{callActive ? 'Connected' : 'Calling...'}</div><div className="text-2xl font-bold text-gray-800">{fmtDur(callTimer)}</div></div>}</div></div><div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"><h3 className="text-sm font-semibold text-gray-800 px-6 py-4 border-b border-gray-100">History</h3><div className="overflow-y-auto max-h-[400px]">{calls.sort((a, b) => b.startedAt - a.startedAt).map(c => <div key={c.id} className="px-6 py-4 border-b border-gray-50 flex items-center gap-4"><div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center"><i className="fa-solid fa-phone text-sm text-green-500"></i></div><div className="flex-1 min-w-0"><div className="text-sm font-medium text-gray-800">{c.contactName}</div><div className="text-xs text-gray-400">{c.contactPhone}</div></div><div className="text-right"><div className="text-xs text-gray-500">{fmtDur(c.duration)}</div><div className="text-[10px] text-gray-400">{fmtDate(c.startedAt)}</div></div></div>)}</div></div></div>); }
+
+function EmailView() { const { emailConfig, setEmailConfig, emailMessages, setEmailMessages, leads, setLeads, toast } = useApp(); const [tab, setTab] = useState('inbox'); const [selectedId, setSelectedId] = useState(null); const [compose, setCompose] = useState(null); const [showSettings, setShowSettings] = useState(false); const [sending, setSending] = useState(false); const [testing, setTesting] = useState(false); const selectedEmail = emailMessages.find(m => m.id === selectedId); const inboxMsgs = emailMessages.filter(m => m.folder === 'inbox').sort((a, b) => b.date - a.date); const sentMsgs = emailMessages.filter(m => m.folder === 'sent').sort((a, b) => b.date - a.date); const currentMsgs = tab === 'inbox' ? inboxMsgs : sentMsgs; const unreadCount = inboxMsgs.filter(m => !m.read).length; const selectEmail = (id) => { setSelectedId(id); setEmailMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m)) }; const openCompose = (prefill) => { setCompose({ to: prefill && prefill.to ? prefill.to : '', cc: '', subject: prefill && prefill.subject ? prefill.subject : '', body: prefill && prefill.body ? prefill.body : (emailConfig.signature || ''), leadId: prefill && prefill.leadId ? prefill.leadId : null }) }; const sendEmail = async () => { if (!compose.to.trim()) { toast('Recipient required', 'error'); return; } if (!compose.subject.trim()) { toast('Subject required', 'error'); return; } if (!emailConfig.connected) { toast('Connect email in Settings first', 'error'); return; } setSending(true); try { await emailjs.send(emailConfig.serviceId, emailConfig.templateId, { to_email: compose.to, from_name: emailConfig.fromName, from_email: emailConfig.fromEmail, subject: compose.subject, message: compose.body }, emailConfig.publicKey); const newMsg = { id: genId(), folder: 'sent', from: emailConfig.fromEmail, fromName: emailConfig.fromName, to: compose.to, subject: compose.subject, body: compose.body, date: Date.now(), read: true, leadId: compose.leadId || null }; setEmailMessages(prev => [...prev, newMsg]); if (compose.leadId) { setLeads(prev => prev.map(l => l.id === compose.leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'email', text: 'Email: ' + compose.subject.slice(0, 50), at: Date.now() }] } : l)); } toast('Email sent!'); setCompose(null); } catch (err) { console.error('EmailJS:', err); toast('Send failed. Check settings.', 'error'); } setSending(false); }; const testConnection = async () => { if (!emailConfig.serviceId.trim() || !emailConfig.templateId.trim() || !emailConfig.publicKey.trim()) { toast('All 3 EmailJS fields required', 'error'); return; } setTesting(true); try { await emailjs.send(emailConfig.serviceId, emailConfig.templateId, { to_email: emailConfig.fromEmail, from_name: 'NexaCRM', from_email: emailConfig.fromEmail, subject: 'Test from NexaCRM', message: 'Connection test successful!' }, emailConfig.publicKey); setEmailConfig(prev => ({ ...prev, connected: true })); toast('Connected! Check inbox for test.'); } catch (err) { setEmailConfig(prev => ({ ...prev, connected: false })); toast('Failed: ' + (err && err.text ? err.text : 'Check credentials'), 'error'); } setTesting(false); }; const deleteEmail = (id) => { setEmailMessages(prev => prev.filter(m => m.id !== id)); if (selectedId === id) setSelectedId(null); toast('Deleted', 'info'); }; const ec = emailConfig; const setEC = (k, v) => setEmailConfig(prev => ({ ...prev, [k]: v })); return (<div className="fade-in flex h-[calc(100vh-3.5rem)] -m-6"><div className="w-56 shrink-0 bg-white border-r border-gray-100 flex flex-col p-4 gap-3"><button onClick={() => openCompose({})} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 w-full"><i className="fa-solid fa-pen-to-square"></i>Compose</button><div className="space-y-1 mt-2"><button onClick={() => { setTab('inbox'); setSelectedId(null); }} className={"w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all " + (tab === 'inbox' ? 'bg-brand-50 text-brand-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><i className="fa-solid fa-inbox w-4"></i>Inbox{unreadCount > 0 && <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{unreadCount}</span>}</button><button onClick={() => { setTab('sent'); setSelectedId(null); }} className={"w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all " + (tab === 'sent' ? 'bg-brand-50 text-brand-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><i className="fa-solid fa-paper-plane w-4"></i>Sent</button></div><div className="flex-1"></div><div className="border-t border-gray-100 pt-3"><button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50"><i className="fa-solid fa-gear w-4"></i>Settings</button><div className="mt-3 px-3 flex items-center gap-2"><div className={"w-2 h-2 rounded-full " + (ec.connected ? 'bg-green-500' : 'bg-gray-300')}></div><span className="text-[11px] text-gray-400">{ec.connected ? 'Connected' : 'Not connected'}</span></div></div></div><div className="w-96 shrink-0 border-r border-gray-100 bg-white flex flex-col overflow-hidden"><div className="px-4 py-3 border-b border-gray-100"><h3 className="text-sm font-semibold text-gray-800">{tab === 'inbox' ? 'Inbox' : 'Sent'} ({currentMsgs.length})</h3></div><div className="flex-1 overflow-y-auto">{currentMsgs.length === 0 && <div className="p-10 text-center text-gray-400 text-sm">No emails</div>}{currentMsgs.map(m => (<div key={m.id} onClick={() => selectEmail(m.id)} className={"email-row px-4 py-3 border-b border-gray-50 cursor-pointer transition-all " + (selectedId === m.id ? 'sel' : '') + (m.read ? '' : ' bg-brand-50/30')}><div className="flex items-center justify-between mb-1"><span className={"text-sm truncate " + (m.read ? 'text-gray-700' : 'text-gray-900 font-semibold')}>{tab === 'inbox' ? m.fromName : m.to}</span><span className="text-[10px] text-gray-400 shrink-0 ml-2">{fmtDate(m.date)}</span></div><div className={"text-xs truncate " + (m.read ? 'text-gray-500' : 'text-gray-700 font-medium')}>{m.subject}</div></div>))}</div></div><div className="flex-1 flex flex-col bg-white overflow-hidden">{compose ? (<div className="flex-1 flex flex-col"><div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h3 className="text-sm font-semibold text-gray-800">New Message</h3><button onClick={() => setCompose(null)} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark"></i></button></div><div className="p-6 space-y-4 flex-1 overflow-y-auto"><div className="flex items-center gap-3"><label className="text-xs font-medium text-gray-500 w-10 shrink-0">To</label><input value={compose.to} onChange={e => setCompose(p => ({ ...p, to: e.target.value }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="recipient@email.com" /><select onChange={e => { const l = leads.find(x => x.id === e.target.value); if (l && l.email) setCompose(p => ({ ...p, to: l.email, leadId: l.id })); }} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shrink-0" value=""><option value="">Leads</option>{leads.filter(l => l.email).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div className="flex items-center gap-3"><label className="text-xs font-medium text-gray-500 w-10 shrink-0">Subject</label><input value={compose.subject} onChange={e => setCompose(p => ({ ...p, subject: e.target.value }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><textarea value={compose.body} onChange={e => setCompose(p => ({ ...p, body: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none min-h-[280px]" placeholder="Write your email..." /></div><div className="px-6 py-4 border-t border-gray-100 flex items-center gap-3"><button onClick={sendEmail} disabled={sending} className="bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300 text-white px-6 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2"><i className={"fa-solid " + (sending ? 'fa-spinner fa-spin' : 'fa-paper-plane')}></i>{sending ? 'Sending...' : 'Send'}</button><button onClick={() => setCompose(null)} className="text-gray-500 px-4 py-2.5 rounded-lg text-sm">Discard</button></div></div>) : selectedEmail ? (<div className="flex-1 overflow-y-auto"><div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><div className="flex items-center gap-2"><button onClick={() => setSelectedId(null)} className="text-gray-400 hover:text-gray-600 mr-2"><i className="fa-solid fa-arrow-left"></i></button><h3 className="text-sm font-semibold text-gray-800 truncate">{selectedEmail.subject}</h3></div><div className="flex items-center gap-3">{tab === 'inbox' && <button onClick={() => openCompose({ to: selectedEmail.from, subject: 'Re: ' + selectedEmail.subject })} className="text-brand-500 hover:text-brand-600 text-sm font-medium"><i className="fa-solid fa-reply mr-1"></i>Reply</button>}<button onClick={() => deleteEmail(selectedEmail.id)} className="text-gray-400 hover:text-red-500"><i className="fa-solid fa-trash-can text-sm"></i></button></div></div><div className="p-6"><div className="flex items-center gap-4 mb-6"><div className="w-11 h-11 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold text-purple-600">{(selectedEmail.folder === 'inbox' ? selectedEmail.fromName : 'You').split(' ').map(n => n[0]).join('').slice(0, 2)}</div><div className="flex-1 min-w-0"><div className="text-sm font-semibold text-gray-800">{selectedEmail.folder === 'inbox' ? selectedEmail.fromName : 'You'}</div><div className="text-xs text-gray-400">{selectedEmail.folder === 'inbox' ? 'From: ' + selectedEmail.from : 'To: ' + selectedEmail.to}</div></div><div className="text-xs text-gray-400">{fmtDate(selectedEmail.date)}</div></div><div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{selectedEmail.body}</div></div></div>) : <div className="flex-1 flex items-center justify-center text-gray-400"><div className="text-center"><i className="fa-solid fa-envelope-open text-5xl mb-3 text-gray-200"></i><p className="text-sm">Select an email</p></div></div>}</div>{showSettings && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setShowSettings(false)}><div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 fade-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}><div className="flex items-center justify-between mb-6"><h2 className="text-lg font-bold text-gray-800"><i className="fa-solid fa-gear mr-2 text-gray-400"></i>Email Settings</h2><button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button></div>{ec.connected ? (<div className="text-center py-8"><div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4"><i className="fa-solid fa-check text-green-600 text-2xl"></i></div><h3 className="text-lg font-semibold text-gray-800 mb-1">Connected</h3><p className="text-sm text-gray-500 mb-1">{ec.fromEmail}</p><p className="text-xs text-gray-400 mb-6">Service: {ec.serviceId}</p><button onClick={() => { setEC('connected', false); toast('Disconnected', 'info'); }} className="bg-red-50 text-red-600 hover:bg-red-100 px-6 py-2.5 rounded-xl text-sm font-medium">Disconnect</button></div>) : (<div className="space-y-4"><div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700"><i className="fa-solid fa-circle-info mr-2"></i><strong>Setup:</strong><ol className="mt-2 ml-4 list-decimal space-y-1 text-xs"><li>Go to <a href="https://www.emailjs.com" target="_blank" className="underline font-medium">emailjs.com</a> — sign up free</li><li>Add Gmail as Email Service — copy <b>Service ID</b></li><li>Create Template with variables: <code>{'{{to_email}}'}</code> <code>{'{{subject}}'}</code> <code>{'{{message}}'}</code> <code>{'{{from_name}}'}</code> <code>{'{{invite_link}}'}</code> — copy <b>Template ID</b></li><li>Account &rarr; copy <b>Public Key</b></li><li>Paste below &rarr; Test Connection</li></ol></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Service ID *</label><input value={ec.serviceId} onChange={e => setEC('serviceId', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="service_xxxxxxx" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Template ID *</label><input value={ec.templateId} onChange={e => setEC('templateId', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="template_xxxxxxx" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Public Key *</label><input value={ec.publicKey} onChange={e => setEC('publicKey', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="xxxxxxxxxxxxxxx" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Your Name</label><input value={ec.fromName} onChange={e => setEC('fromName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Your Email</label><input value={ec.fromEmail} onChange={e => setEC('fromEmail', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Signature</label><textarea value={ec.signature} onChange={e => setEC('signature', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm resize-none h-20" /></div><button onClick={testConnection} disabled={testing} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600 disabled:bg-brand-300 flex items-center justify-center gap-2"><i className={"fa-solid " + (testing ? 'fa-spinner fa-spin' : 'fa-plug')}></i>{testing ? 'Testing...' : 'Test Connection & Connect'}</button></div>)}</div></div>}</div>); }
+
+function QuotationsView() { const { quotations, setQuotations, leads, toast, setModalContent } = useApp(); const [form, setForm] = useState(null); const startCreate = () => { setForm({ number: 'Q-' + String(quotations.length + 1).padStart(3, '0'), leadId: '', customerName: '', customerEmail: '', items: [{ desc: '', qty: 1, rate: 0 }], tax: 18, status: 'draft', validUntil: Date.now() + 864e5 * 30 }) }; const saveQuotation = () => { if (!form.customerName.trim()) { toast('Customer required', 'error'); return; } if (form.id) { setQuotations(prev => prev.map(q => q.id === form.id ? { ...form, updatedAt: Date.now() } : q)); toast('Updated'); } else { setQuotations(prev => [...prev, { ...form, id: genId(), createdAt: Date.now() }]); toast('Created'); } setForm(null); }; const updateStatus = (id, status) => { setQuotations(prev => prev.map(q => q.id === id ? { ...q, status } : q)); toast('Status updated'); }; const deleteQ = (id) => { setQuotations(prev => prev.filter(q => q.id !== id)); toast('Deleted', 'info'); }; const addItem = () => setForm(prev => ({ ...prev, items: [...prev.items, { desc: '', qty: 1, rate: 0 }] })); const removeItem = (idx) => setForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) })); const setItem = (idx, key, val) => setForm(prev => ({ ...prev, items: prev.items.map((it, i) => i === idx ? { ...it, [key]: val } : it) })); const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v })); const linkLead = (leadId) => { const lead = leads.find(l => l.id === leadId); if (lead) setForm(prev => ({ ...prev, leadId, customerName: lead.name, customerEmail: lead.email || '' })); }; const statusColors = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-amber-100 text-amber-700', accepted: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600' }; if (form) return (<div className="fade-in bg-white rounded-2xl p-6 border border-gray-100 shadow-sm max-w-3xl"><h3 className="text-lg font-bold text-gray-800 mb-5">{form.id ? 'Edit' : 'Create'} Quotation</h3><div className="grid grid-cols-2 gap-4 mb-5"><div><label className="text-xs font-medium text-gray-500 mb-1 block">Number</label><input value={form.number} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50" readOnly /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Lead</label><select value={form.leadId} onChange={e => linkLead(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white"><option value="">-- Select --</option>{leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Customer *</label><input value={form.customerName} onChange={e => setField('customerName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Email</label><input value={form.customerEmail} onChange={e => setField('customerEmail', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Valid Until</label><input type="date" value={form.validUntil ? new Date(form.validUntil).toISOString().split('T')[0] : ''} onChange={e => setField('validUntil', new Date(e.target.value).getTime())} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Tax %</label><input type="number" value={form.tax} onChange={e => setField('tax', Number(e.target.value))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div></div><div className="mb-5"><div className="flex items-center justify-between mb-2"><label className="text-xs font-semibold text-gray-500 uppercase">Items</label><button onClick={addItem} className="text-xs text-brand-500 font-medium"><i className="fa-solid fa-plus mr-1"></i>Add</button></div><div className="space-y-2">{form.items.map((item, idx) => (<div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-5"><input value={item.desc} onChange={e => setItem(idx, 'desc', e.target.value)} placeholder="Description" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-2"><input type="number" min="1" value={item.qty} onChange={e => setItem(idx, 'qty', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-3"><input type="number" value={item.rate} onChange={e => setItem(idx, 'rate', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-1 text-right text-sm font-medium text-gray-700">{fmtCur(item.qty * item.rate)}</div><div className="col-span-1 text-right"><button onClick={() => removeItem(idx)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></div>))}</div><div className="mt-3 pt-3 border-t border-gray-100 text-right"><div className="text-base font-bold text-gray-800">Total: {fmtCur(form.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + form.tax / 100))}</div></div></div><div className="flex gap-3"><button onClick={saveQuotation} className="bg-brand-500 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-600">{form.id ? 'Update' : 'Create'}</button><button onClick={() => setForm(null)} className="bg-gray-100 text-gray-600 px-6 py-2.5 rounded-xl text-sm font-medium">Cancel</button></div></div>); return (<div className="fade-in"><div className="flex items-center justify-between mb-5"><div className="flex gap-2">{['all', 'draft', 'sent', 'accepted'].map(s => <button key={s} onClick={() => {/*filter*/ }} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-500">{s}</button>)}</div><button onClick={startCreate} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Create</button></div><div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase"><th className="px-5 py-3">Number</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead><tbody>{quotations.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(q => { const total = q.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + (q.tax || 18) / 100); return (<tr key={q.id} className="border-t border-gray-50 hover:bg-gray-50/50"><td className="px-5 py-3 font-medium text-gray-800">{q.number}</td><td className="px-5 py-3 text-gray-700">{q.customerName}</td><td className="px-5 py-3 font-semibold text-gray-800">{fmtCur(total)}</td><td className="px-5 py-3"><span className={"px-2.5 py-1 rounded-full text-xs font-semibold " + (statusColors[q.status] || 'bg-gray-100 text-gray-600')}>{q.status}</span></td><td className="px-5 py-3"><div className="flex items-center gap-2"><button onClick={() => setModalContent(<QuotationPreview quotation={q} />)} className="text-brand-500 hover:text-brand-600" title="PDF"><i className="fa-solid fa-file-pdf"></i></button><button onClick={() => { setForm({ ...q }); }} className="text-blue-500 hover:text-blue-600"><i className="fa-solid fa-pen-to-square text-xs"></i></button>{q.status === 'draft' && <button onClick={() => updateStatus(q.id, 'sent')} className="text-amber-500 hover:text-amber-600"><i className="fa-solid fa-paper-plane text-xs"></i></button>}<button onClick={() => deleteQ(q.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></td></tr>); })}</tbody></table></div></div>); }
+
+function QuotationPreview({ quotation }) { const { setModalContent, toast } = useApp(); const pdfRef = useRef(null); const [dl, setDl] = useState(false); const subtotal = quotation.items.reduce((s, i) => s + i.qty * i.rate, 0); const taxAmt = subtotal * (quotation.tax || 18) / 100; const grandTotal = subtotal + taxAmt; const handleDownload = async () => { setDl(true); try { await html2pdf().set({ margin: [0, 0, 0, 0], filename: 'Quotation-' + quotation.number + '.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(pdfRef.current).save(); toast('PDF downloaded'); } catch (e) { toast('Failed', 'error'); } setDl(false); }; return (<div className="p-0"><div className="flex items-center justify-between p-5 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-800">Quotation Preview</h2><div className="flex items-center gap-2"><button onClick={handleDownload} disabled={dl} className="bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300 text-white px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><i className={"fa-solid " + (dl ? 'fa-spinner fa-spin' : 'fa-download')}></i>{dl ? 'Generating...' : 'Download PDF'}</button><button onClick={() => setModalContent(null)} className="text-gray-400 hover:text-gray-600 p-1"><i className="fa-solid fa-xmark text-lg"></i></button></div></div><div className="p-6 bg-gray-100 flex justify-center overflow-y-auto max-h-[75vh]"><div ref={pdfRef} style={{ width: '794px', minHeight: '1123px', padding: '48px', background: '#fff', fontFamily: 'DM Sans, sans-serif' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px' }}><div><div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}><div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '22px', fontWeight: 700 }}>N</div><span style={{ fontSize: '24px', fontWeight: 700, color: '#0B1120' }}>NexaCRM</span></div><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>123 Business Avenue, Bengaluru</p><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>admin@nexacrm.com</p></div><div style={{ textAlign: 'right' }}><h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0B1120', margin: 0 }}>QUOTATION</h1><p style={{ fontSize: '14px', color: '#10b981', fontWeight: 600, margin: '4px 0 16px' }}>{quotation.number}</p><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Date: {fmtDate(quotation.createdAt)}</p></div></div><div style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', marginBottom: '32px', border: '1px solid #e2e8f0' }}><p style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' }}>Bill To</p><p style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>{quotation.customerName}</p><p style={{ fontSize: '13px', color: '#64748b', margin: '2px 0 0' }}>{quotation.customerEmail}</p></div><table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '13px' }}><thead><tr style={{ background: '#0B1120' }}><th style={{ padding: '12px', textAlign: 'left', color: '#fff', fontWeight: 600, fontSize: '12px' }}>#</th><th style={{ padding: '12px', textAlign: 'left', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Description</th><th style={{ padding: '12px', textAlign: 'center', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Qty</th><th style={{ padding: '12px', textAlign: 'right', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Rate</th><th style={{ padding: '12px', textAlign: 'right', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Amount</th></tr></thead><tbody>{quotation.items.map((item, idx) => <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}><td style={{ padding: '14px 12px', color: '#94a3b8' }}>{idx + 1}</td><td style={{ padding: '14px 12px', color: '#1e293b', fontWeight: 500 }}>{item.desc}</td><td style={{ padding: '14px 12px', textAlign: 'center', color: '#475569' }}>{item.qty}</td><td style={{ padding: '14px 12px', textAlign: 'right', color: '#475569' }}>{fmtCur(item.rate)}</td><td style={{ padding: '14px 12px', textAlign: 'right', color: '#1e293b', fontWeight: 600 }}>{fmtCur(item.qty * item.rate)}</td></tr>)}</tbody></table><div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '40px' }}><table style={{ fontSize: '13px', borderCollapse: 'collapse', minWidth: '260px' }}><tbody><tr><td style={{ padding: '8px 0', color: '#64748b' }}>Subtotal</td><td style={{ padding: '8px 16px', textAlign: 'right', color: '#1e293b', fontWeight: 500 }}>{fmtCur(subtotal)}</td></tr><tr><td style={{ padding: '8px 0', color: '#64748b' }}>Tax ({quotation.tax || 18}%)</td><td style={{ padding: '8px 16px', textAlign: 'right', color: '#1e293b', fontWeight: 500 }}>{fmtCur(taxAmt)}</td></tr><tr style={{ borderTop: '2px solid #0B1120' }}><td style={{ padding: '12px 0', color: '#0B1120', fontWeight: 700, fontSize: '15px' }}>Grand Total</td><td style={{ padding: '12px 16px', textAlign: 'right', color: '#0B1120', fontWeight: 800, fontSize: '18px' }}>{fmtCur(grandTotal)}</td></tr></tbody></table></div></div></div></div>); }
+
+function InvoicesView() { const { invoices, setInvoices, quotations, toast, setModalContent } = useApp(); const [form, setForm] = useState(null); const startCreate = () => { setForm({ number: 'INV-' + String(invoices.length + 1).padStart(3, '0'), quotationId: '', leadId: '', customerName: '', customerEmail: '', items: [{ desc: '', qty: 1, rate: 0 }], tax: 18, status: 'unpaid', dueDate: Date.now() + 864e5 * 30 }) }; const linkQuotation = (qId) => { const q = quotations.find(x => x.id === qId); if (q) setForm(prev => ({ ...prev, quotationId: qId, customerName: q.customerName, customerEmail: q.customerEmail, items: [...q.items], tax: q.tax })); }; const saveInvoice = () => { if (!form.customerName.trim()) { toast('Customer required', 'error'); return; } setInvoices(prev => [...prev, { ...form, id: genId(), createdAt: Date.now() }]); toast('Created'); setForm(null); }; const markPaid = (id) => { setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: 'paid', paidAt: Date.now() } : i)); toast('Paid'); }; const deleteInv = (id) => { setInvoices(prev => prev.filter(i => i.id !== id)); toast('Deleted', 'info'); }; const addItem = () => setForm(prev => ({ ...prev, items: [...prev.items, { desc: '', qty: 1, rate: 0 }] })); const removeItem = (idx) => setForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) })); const setItem = (idx, key, val) => setForm(prev => ({ ...prev, items: prev.items.map((it, i) => i === idx ? { ...it, [key]: val } : it) })); const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v })); const statusColors = { unpaid: 'bg-amber-100 text-amber-700', paid: 'bg-green-100 text-green-700' }; if (form) return (<div className="fade-in bg-white rounded-2xl p-6 border border-gray-100 shadow-sm max-w-3xl"><h3 className="text-lg font-bold text-gray-800 mb-5">Create Invoice</h3><div className="grid grid-cols-2 gap-4 mb-5"><div><label className="text-xs font-medium text-gray-500 mb-1 block">Number</label><input value={form.number} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50" readOnly /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">From Quotation</label><select value={form.quotationId} onChange={e => linkQuotation(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white"><option value="">-- Select --</option>{quotations.filter(q => q.status === 'accepted').map(q => <option key={q.id} value={q.id}>{q.number}</option>)}</select></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Customer *</label><input value={form.customerName} onChange={e => setField('customerName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Email</label><input value={form.customerEmail} onChange={e => setField('customerEmail', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Due Date</label><input type="date" value={form.dueDate ? new Date(form.dueDate).toISOString().split('T')[0] : ''} onChange={e => setField('dueDate', new Date(e.target.value).getTime())} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Tax %</label><input type="number" value={form.tax} onChange={e => setField('tax', Number(e.target.value))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div></div><div className="mb-5"><div className="flex items-center justify-between mb-2"><label className="text-xs font-semibold text-gray-500 uppercase">Items</label><button onClick={addItem} className="text-xs text-brand-500 font-medium"><i className="fa-solid fa-plus mr-1"></i>Add</button></div><div className="space-y-2">{form.items.map((item, idx) => (<div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-5"><input value={item.desc} onChange={e => setItem(idx, 'desc', e.target.value)} placeholder="Description" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-2"><input type="number" min="1" value={item.qty} onChange={e => setItem(idx, 'qty', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-3"><input type="number" value={item.rate} onChange={e => setItem(idx, 'rate', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-1 text-right text-sm font-medium text-gray-700">{fmtCur(item.qty * item.rate)}</div><div className="col-span-1 text-right"><button onClick={() => removeItem(idx)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></div>))}</div><div className="mt-3 pt-3 border-t border-gray-100 text-right"><div className="text-base font-bold text-gray-800">Total: {fmtCur(form.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + form.tax / 100))}</div></div></div><div className="flex gap-3"><button onClick={saveInvoice} className="bg-brand-500 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-600">Create</button><button onClick={() => setForm(null)} className="bg-gray-100 text-gray-600 px-6 py-2.5 rounded-xl text-sm font-medium">Cancel</button></div></div>); return (<div className="fade-in"><div className="flex items-center justify-between mb-5"><div className="text-sm text-gray-500">{invoices.length} invoice(s)</div><button onClick={startCreate} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Create</button></div><div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase"><th className="px-5 py-3">Number</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead><tbody>{invoices.map(inv => { const total = inv.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + (inv.tax || 18) / 100); return (<tr key={inv.id} className="border-t border-gray-50 hover:bg-gray-50/50"><td className="px-5 py-3 font-medium text-gray-800">{inv.number}</td><td className="px-5 py-3 text-gray-700">{inv.customerName}</td><td className="px-5 py-3 font-semibold text-gray-800">{fmtCur(total)}</td><td className="px-5 py-3"><span className={"px-2.5 py-1 rounded-full text-xs font-semibold " + (statusColors[inv.status] || 'bg-gray-100 text-gray-600')}>{inv.status}</span></td><td className="px-5 py-3"><div className="flex items-center gap-2"><button onClick={() => setModalContent(<InvoicePreview invoice={inv} />)} className="text-brand-500 hover:text-brand-600" title="PDF"><i className="fa-solid fa-file-pdf"></i></button>{inv.status === 'unpaid' && <button onClick={() => markPaid(inv.id)} className="text-green-500 hover:text-green-600"><i className="fa-solid fa-check-circle"></i></button>}<button onClick={() => deleteInv(inv.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></td></tr>); })}</tbody></table></div></div>); }
+
+function InvoicePreview({ invoice }) {
+  const { setModalContent, toast } = useApp();
+  const pdfRef = useRef(null);
+  const [dl, setDl] = useState(false);
+  const subtotal = invoice.items.reduce((s, i) => s + i.qty * i.rate, 0);
+  const taxAmt = subtotal * (invoice.tax || 18) / 100;
+  const grandTotal = subtotal + taxAmt;
+  const isPaid = invoice.status === 'paid';
+
+  const handleDownload = async () => {
+    setDl(true);
+    try {
+      await html2pdf().set({
+        margin: [0, 0, 0, 0], filename: 'Invoice-' + invoice.number + '.pdf',
+        image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      }).from(pdfRef.current).save();
+      toast('PDF downloaded');
+    } catch (e) { toast('Failed', 'error'); }
+    setDl(false);
+  };
+
+  return (
+    <div className="p-0">
+      <div className="flex items-center justify-between p-5 border-b border-gray-100">
+        <h2 className="text-lg font-bold text-gray-800">Invoice Preview</h2>
+        <div className="flex items-center gap-2">
+          <button onClick={handleDownload} disabled={dl} className="bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300 text-white px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><i className={"fa-solid " + (dl ? 'fa-spinner fa-spin' : 'fa-download')}></i>{dl ? 'Generating...' : 'Download PDF'}</button>
+          <button onClick={() => setModalContent(null)} className="text-gray-400 hover:text-gray-600 p-1"><i className="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+      </div>
+      <div className="p-6 bg-gray-100 flex justify-center overflow-y-auto max-h-[75vh]">
+        <div ref={pdfRef} style={{ width: '794px', minHeight: '1123px', padding: '48px', background: '#fff', fontFamily: 'DM Sans, sans-serif' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}><div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '22px', fontWeight: 700 }}>N</div><span style={{ fontSize: '24px', fontWeight: 700, color: '#0B1120' }}>NexaCRM</span></div>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>123 Business Avenue, Bengaluru</p><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>admin@nexacrm.com4</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0B1120', margin: 0 }}>INVOICE</h1>
+              <p style={{ fontSize: '14px', color: '#10b981', fontWeight: 600, margin: '4px 0 16px' }}>{invoice.number}</p>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Date: {fmtDate(invoice.createdAt)}</p>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>Due: {fmtDate(invoice.dueDate)}</p>
+              <p style={{ fontSize: '13px', margin: '8px 0 0' }}><span style={{ background: isPaid ? '#d1fae5' : '#fef3c7', color: isPaid ? '#059669' : '#d97706', padding: '2px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600 }}>{invoice.status.toUpperCase()}</span></p>
+            </div>
+          </div>
+          <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', marginBottom: '32px', border: '1px solid #e2e8f0' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' }}>Bill To</p>
+            <p style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>{invoice.customerName}</p>
+            <p style={{ fontSize: '13px', color: '#64748b', margin: '2px 0 0' }}>{invoice.customerEmail}</p>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '13px' }}>
+            <thead><tr style={{ background: '#0B1120' }}><th style={{ padding: '12px', textAlign: 'left', color: '#fff', fontWeight: 600, fontSize: '12px' }}>#</th><th style={{ padding: '12px', textAlign: 'left', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Description</th><th style={{ padding: '12px', textAlign: 'center', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Qty</th><th style={{ padding: '12px', textAlign: 'right', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Rate</th><th style={{ padding: '12px', textAlign: 'right', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Amount</th></tr></thead>
+            <tbody>{invoice.items.map((item, idx) => <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}><td style={{ padding: '14px 12px', color: '#94a3b8' }}>{idx + 1}</td><td style={{ padding: '14px 12px', color: '#1e293b', fontWeight: 500 }}>{item.desc}</td><td style={{ padding: '14px 12px', textAlign: 'center', color: '#475569' }}>{item.qty}</td><td style={{ padding: '14px 12px', textAlign: 'right', color: '#475569' }}>{fmtCur(item.rate)}</td><td style={{ padding: '14px 12px', textAlign: 'right', color: '#1e293b', fontWeight: 600 }}>{fmtCur(item.qty * item.rate)}</td></tr>)}</tbody>
+          </table>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '32px' }}>
+            <table style={{ fontSize: '13px', borderCollapse: 'collapse', minWidth: '260px' }}>
+              <tbody>
+                <tr><td style={{ padding: '8px 0', color: '#64748b' }}>Subtotal</td><td style={{ padding: '8px 16px', textAlign: 'right', color: '#1e293b', fontWeight: 500 }}>{fmtCur(subtotal)}</td></tr>
+                <tr><td style={{ padding: '8px 0', color: '#64748b' }}>Tax ({invoice.tax || 18}%)</td><td style={{ padding: '8px 16px', textAlign: 'right', color: '#1e293b', fontWeight: 500 }}>{fmtCur(taxAmt)}</td></tr>
+                <tr style={{ borderTop: '2px solid #0B1120' }}><td style={{ padding: '12px 0', color: '#0B1120', fontWeight: 700, fontSize: '15px' }}>Grand Total</td><td style={{ padding: '12px 16px', textAlign: 'right', color: '#0B1120', fontWeight: 800, fontSize: '18px' }}>{fmtCur(grandTotal)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          {isPaid && (<div style={{ textAlign: 'center', marginBottom: '24px' }}><span style={{ display: 'inline-block', border: '4px solid #059669', borderRadius: '50%', width: '100px', height: '100px', lineHeight: '92px', fontSize: '24px', fontWeight: 900, color: '#059669', transform: 'rotate(-15deg)', opacity: 0.3 }}>PAID</span></div>)}
+          <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', marginBottom: '32px', border: '1px solid #e2e8f0' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '10px' }}>Bank Details</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '13px' }}>
+              <div><span style={{ color: '#94a3b8' }}>Bank:</span> <span style={{ color: '#1e293b', fontWeight: 500 }}>HDFC Bank</span></div>
+              <div><span style={{ color: '#94a3b8' }}>A/C:</span> <span style={{ color: '#1e293b', fontWeight: 500 }}>50100372644891</span></div>
+              <div><span style={{ color: '#94a3b8' }}>IFSC:</span> <span style={{ color: '#1e293b', fontWeight: 500 }}>HDFC0002876</span></div>
+              <div><span style={{ color: '#94a3b8' }}>Branch:</span> <span style={{ color: '#1e293b', fontWeight: 500 }}>Koramangala</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InviteAgentModal() {
+  const { invitations, setInvitations, users, toast, setModalContent, emailConfig } = useApp();
+  const [method, setMethod] = useState('email');
+  const [contact, setContact] = useState('');
+  const [sending, setSending] = useState(false);
+  const handleInvite = async () => {
+    if (!contact.trim()) { toast('Please enter an email or phone number', 'error'); return; }
+    if (method === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) { toast('Invalid email format', 'error'); return; }
+    if (method === 'phone' && !/^\+?[\d\s-]{10,}$/.test(contact)) { toast('Invalid phone format', 'error'); return; }
+    if (users.some(u => u.email === contact || u.phone === contact)) { toast('This person is already a member!', 'error'); return; }
+    const token = genToken();
+    const baseUrl = window.location.origin + window.location.pathname;
+    const inviteLink = `${baseUrl}?token=${token}`;
+    const newInvite = { email: method === 'email' ? contact : '', phone: method === 'phone' ? contact : '', token, status: 'pending', expires_at: new Date(Date.now() + 172800000).toISOString() };
+    setSending(true);
+    const { data: savedInvite, error } = await supabase.from('invitations').insert(newInvite).select().single();
+    if (error) { toast('Failed to create invite in database.', 'error'); setSending(false); return; }
+    setInvitations(prev => [...prev, savedInvite]);
+    if (method === 'email') {
+      if (emailConfig.connected) {
+        try {
+          await emailjs.send(emailConfig.serviceId, emailConfig.templateId, {
+            to_email: contact, from_name: emailConfig.fromName, from_email: emailConfig.fromEmail,
+            subject: `You're invited to join ${emailConfig.fromName}'s CRM!`,
+            message: `Hi,\n\n${emailConfig.fromName} has invited you to join their CRM. Click the link below to accept and set up your password:\n\n${inviteLink}\n\nThis link expires in 48 hours.`,
+            invite_link: inviteLink
+          }, emailConfig.publicKey);
+          toast('Invite email sent successfully!');
+        } catch (err) { console.error('EmailJS Error:', err); toast('Failed to send email. Check Email Settings.', 'error'); }
+        setSending(false);
+      } else { toast('Email not connected! Invite link generated below. Configure in Email > Settings.', 'info'); }
+    } else { toast('Invite generated! (SMS requires a backend API like Twilio)'); }
+    setModalContent(null);
+  };
+  return (
+    <div className="p-6 max-w-md mx-auto">
+      <div className="flex items-center justify-between mb-6"><h2 className="text-xl font-bold text-gray-800">Invite Agent</h2><button onClick={() => setModalContent(null)} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button></div>
+      <div className="space-y-4">
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">How would you like to send the invite?</label><div className="flex gap-2 mt-1"><button onClick={() => setMethod('email')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${method === 'email' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}><i className="fa-solid fa-envelope mr-1"></i>Email</button><button onClick={() => setMethod('phone')} className={`flex-1 py-2 rounded-lg text-sm font-medium ${method === 'phone' ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}><i className="fa-solid fa-phone mr-1"></i>Phone</button></div></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">{method === 'email' ? 'Agent Email Address' : 'Agent Phone Number'}</label><input type={method === 'email' ? 'email' : 'tel'} value={contact} onChange={e => setContact(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder={method === 'email' ? 'agent@example.com' : '+91 12345 67890'} /></div>
+        {method === 'email' && !emailConfig.connected && (<p className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg">⚠️ Your email is not connected. Go to <b>Email {'>'} Settings</b> to connect EmailJS so you can send real invites.</p>)}
+        <button onClick={handleInvite} disabled={sending} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600 flex items-center justify-center gap-2">{sending ? <><i className="fa-solid fa-spinner fa-spin"></i> Sending...</> : <><i className="fa-solid fa-paper-plane mr-2"></i>Generate & Send Invite</>}</button>
+      </div>
+    </div>
+  );
+}
+
+function TeamView() {
+  const { users, invitations, setInvitations, toast, setModalContent, currentUser, emailConfig } = useApp();
+  const revokeInvite = async (id) => { await supabase.from('invitations').update({ status: 'revoked' }).eq('id', id); setInvitations(prev => prev.map(inv => inv.id === id ? { ...inv, status: 'revoked' } : inv)); toast('Invite revoked', 'info'); };
+  const resendInvite = async (inv) => {
+    const newToken = genToken();
+    const baseUrl = window.location.origin + window.location.pathname;
+    const inviteLink = `${baseUrl}?token=${newToken}`;
+    const { data: updatedInvite } = await supabase.from('invitations').update({ token: newToken, status: 'pending', expires_at: new Date(Date.now() + 172800000).toISOString() }).eq('id', inv.id).select().single();
+    setInvitations(prev => prev.map(i => i.id === inv.id ? updatedInvite : i));
+    if (inv.email && emailConfig.connected) {
+      toast('Resending email...');
+      try {
+        await emailjs.send(emailConfig.serviceId, emailConfig.templateId, {
+          to_email: inv.email, from_name: emailConfig.fromName, from_email: emailConfig.fromEmail,
+          subject: `Reminder: Accept your CRM invite`,
+          message: `Hi,\n\nThis is a reminder to join ${emailConfig.fromName}'s CRM. Click the link below:\n\n${inviteLink}`,
+          invite_link: inviteLink
+        }, emailConfig.publicKey);
+        toast('Invite email resent successfully!');
+      } catch (err) { toast('Failed to resend email. Check settings.', 'error'); }
+    } else { toast('Invite link refreshed. (Connect email to send automatically)'); }
+  };
+  const roleColors = { Admin: 'bg-purple-100 text-purple-700', Agent: 'bg-blue-100 text-blue-700' };
+  const statusColors = { active: 'bg-green-100 text-green-700', invited: 'bg-gray-100 text-gray-600', revoked: 'bg-red-100 text-red-600', expired: 'bg-orange-100 text-orange-600' };
+  const inviteStatusColors = { pending: 'bg-amber-100 text-amber-700', accepted: 'bg-green-100 text-green-700', revoked: 'bg-red-100 text-red-600', expired: 'bg-orange-100 text-orange-600' };
+  return (
+    <div className="fade-in">
+      <div className="flex items-center justify-between mb-5">
+        <div className="text-sm text-gray-500">{users.length} member(s) · {invitations.filter(i => i.status === 'pending').length} pending invite(s)</div>
+        <button onClick={() => setModalContent(<InviteAgentModal />)} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Invite Agent</button>
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-8">
+        <h3 className="text-sm font-semibold text-gray-800 px-5 py-3 border-b border-gray-100">Team Members</h3>
+        <table className="w-full text-sm">
+          <thead><tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase"><th className="px-5 py-3">Member</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id} className="border-t border-gray-50">
+                <td className="px-5 py-3 flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center text-sm font-bold text-brand-600">{u.name.split(' ').map(n => n[0]).join('')}</div><div><div className="font-medium text-gray-800">{u.name}</div><div className="text-xs text-gray-400">{u.email}</div></div></td>
+                <td className="px-5 py-3"><span className={"px-2.5 py-1 rounded-full text-xs font-semibold " + (roleColors[u.role] || 'bg-gray-100 text-gray-600')}>{u.role}</span></td>
+                <td className="px-5 py-3"><span className={"px-2.5 py-1 rounded-full text-xs font-semibold " + (statusColors[u.status] || 'bg-gray-100 text-gray-600')}>{u.status}</span></td>
+                <td className="px-5 py-3">{u.id !== currentUser?.id && <button className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {invitations.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <h3 className="text-sm font-semibold text-gray-800 px-5 py-3 border-b border-gray-100">Invitations</h3>
+          <div className="divide-y divide-gray-50">
+            {invitations.map(inv => {
+              const isExpired = Date.now() > new Date(inv.expires_at).getTime() && inv.status === 'pending';
+              const isPending = inv.status === 'pending' && !isExpired;
+              const baseUrl = window.location.origin + window.location.pathname;
+              const inviteLink = `${baseUrl}?token=${inv.token}`;
+              return (
+                <div key={inv.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-gray-800">{inv.email || inv.phone}</div>
+                    <div className="text-xs text-gray-400 mt-1">Sent: {fmtDate(inv.created_at)} · Expires: {fmtDate(inv.expires_at)}</div>
+                    {isPending && (<div className="mt-2 bg-gray-50 p-2 rounded-lg text-[11px] text-gray-500 flex items-center gap-2 border border-gray-100"><i className="fa-solid fa-link text-brand-500"></i><span className="truncate font-mono" title={inv.token}>{inviteLink}</span><button onClick={() => { navigator.clipboard.writeText(inviteLink); toast('Link copied!'); }} className="text-brand-500 hover:text-brand-600 shrink-0 ml-2"><i className="fa-solid fa-copy"></i></button></div>)}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={"px-2.5 py-1 rounded-full text-xs font-semibold " + (isExpired ? inviteStatusColors.expired : inviteStatusColors[inv.status])}>{isExpired ? 'expired' : inv.status}</span>
+                    {isPending && (<div className="flex gap-2"><button onClick={() => setModalContent(<AcceptInviteModal prefilledToken={inv.token} />)} className="text-xs bg-brand-50 text-brand-600 px-3 py-1.5 rounded-lg font-medium hover:bg-brand-100">Simulate Agent Accept</button><button onClick={() => resendInvite(inv)} className="text-xs text-gray-400 hover:text-blue-500" title="Resend Invite"><i className="fa-solid fa-paper-plane"></i></button><button onClick={() => revokeInvite(inv.id)} className="text-xs text-gray-400 hover:text-red-500" title="Revoke Invite"><i className="fa-solid fa-ban"></i></button></div>)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const { loggedIn, view, setModalContent } = useApp();
+  const [checkedUrl, setCheckedUrl] = useState(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) { setModalContent(<AcceptInviteModal prefilledToken={token} />); }
+    setCheckedUrl(true);
+  }, []);
+  if (!loggedIn && checkedUrl) return <Login />;
+  if (!loggedIn) return <Login />;
+  const renderView = () => { 
+    switch (view) { 
+      case 'dashboard': return <Dashboard />; 
+      case 'leads': return <LeadsView />; 
+      case 'pipelines': return <PipelinesView />; 
+      case 'whatsapp': return <WhatsAppView />; 
+      case 'calls': return <VoiceCallsView />; 
+      case 'email': return <EmailView />; 
+      case 'quotations': return <QuotationsView />; 
+      case 'invoices': return <InvoicesView />; 
+      case 'team': return <TeamView />; 
+      default: return <Dashboard />; 
+    } 
+  };
+  return <div className="flex h-screen"><Sidebar /><div className="flex-1 flex flex-col min-w-0"><TopBar /><main className="flex-1 overflow-y-auto p-6">{renderView()}</main></div><Modal /><Toasts /></div>;
+}
+
+function Root() { return <AppProvider><App /></AppProvider>; }
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+</body>
+</html>
