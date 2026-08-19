@@ -46,7 +46,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#10b981;box-sh
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo, useRef, useContext, createContext } = React;
 
-const VIEW_TITLES = { dashboard: 'Dashboard', leads: 'Leads Pipeline', pipelines: 'Pipelines & Tunnels', whatsapp: 'WhatsApp', calls: 'Voice Calls', email: 'Email', quotations: 'Quotations', invoices: 'Invoices', team: 'Team Management' };
+const VIEW_TITLES = { dashboard: 'Dashboard', leads: 'Leads Pipeline', pipelines: 'Pipelines & Tunnels', whatsapp: 'WhatsApp', calls: 'Voice Calls', email: 'Email', quotations: 'Quotations', invoices: 'Invoices', team: 'Team Management', org: 'Company Structure' };
 const ACT_ICONS = { whatsapp: 'fa-brands fa-whatsapp text-green-500', call: 'fa-solid fa-phone text-blue-500', note: 'fa-solid fa-sticky-note text-yellow-500', email: 'fa-solid fa-envelope text-purple-500', proposal: 'fa-solid fa-file-lines text-teal-500', stage: 'fa-solid fa-arrow-right text-indigo-500' };
 const ACT_COLORS = { whatsapp: 'bg-green-100 text-green-600', call: 'bg-blue-100 text-blue-600', note: 'bg-yellow-100 text-yellow-600', email: 'bg-purple-100 text-purple-600', proposal: 'bg-teal-100 text-teal-600', stage: 'bg-indigo-100 text-indigo-600' };
 
@@ -127,7 +127,7 @@ const INITIAL_TUNNELS = [
 ];
 
 function seedData() {
-  if (getStore('v11', null)) return; 
+  if (getStore('v12', null)) return; 
   const leads = [
     { id: 'l1', name: 'Priya Sharma', phone: '+91 98765 43210', email: 'priya@example.com', company: 'TechStart', interest: 'Web Development', budget: '₹2,00,000', timeline: '1 month', source: 'WhatsApp', stage: 'new', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 2, updatedAt: Date.now() - 864e5, notes: '', activities: [{ type: 'whatsapp', text: 'AI bot initiated', at: Date.now() - 864e5 * 2 }] },
     { id: 'l2', name: 'Rahul Mehta', phone: '+91 87654 32109', email: 'rahul@mehta.in', company: 'Mehta Industries', interest: 'Mobile App', budget: '₹5,00,000', timeline: '2-3 months', source: 'Website', stage: 'contacted', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 5, updatedAt: Date.now() - 864e5 * 3, notes: '', activities: [{ type: 'call', text: 'Outbound call', at: Date.now() - 864e5 * 4 }] },
@@ -151,6 +151,18 @@ function seedData() {
     { id: 'em3', folder: 'sent', from: 'admin@nexacrm.com', fromName: 'Admin User', to: 'anita@desai.com', subject: 'Product Brochure', body: 'Hi Anita,\n\nPlease find our brochure.\n\nBest,\nAdmin', date: Date.now() - 864e5 * 5, read: true, leadId: 'l3' }
   ];
   
+  // Organization Hierarchy Seed
+  const orgDepartments = [
+    { id: 'org_root', name: 'NexaCRM Headquarters', parentId: null, headUserId: 'u1', deputyUserId: null },
+    { id: 'org_sales', name: 'Sales Department', parentId: 'org_root', headUserId: null, deputyUserId: null },
+    { id: 'org_tech', name: 'Technical Department', parentId: 'org_root', headUserId: null, deputyUserId: null }
+  ];
+  
+  const users = [
+    { id: 'u1', name: 'Admin User', email: 'admin@nexacrm.com', phone: '+91 99999 00000', role: 'Admin', status: 'active', password: 'admin123', invitedAt: Date.now() - 864e5 * 60, joinedAt: Date.now() - 864e5 * 60, memberships: [{ deptId: 'org_root', role: 'head', isPrimary: true }] },
+    { id: 'u2', name: 'Sales Agent', email: 'sales@nexacrm.com', phone: '+91 99999 00001', role: 'Agent', status: 'active', password: 'agent123', invitedAt: Date.now() - 864e5 * 50, joinedAt: Date.now() - 864e5 * 50, memberships: [{ deptId: 'org_sales', role: 'employee', isPrimary: true }] }
+  ];
+  
   setStore('leads', leads); 
   setStore('conversations', conversations); 
   setStore('calls', calls); 
@@ -160,7 +172,9 @@ function seedData() {
   setStore('emailMessages', emailMessages);
   setStore('pipelines', INITIAL_PIPELINES);
   setStore('tunnels', INITIAL_TUNNELS);
-  setStore('v11', true);
+  setStore('orgDepartments', orgDepartments);
+  setStore('users', users);
+  setStore('v12', true);
 }
 seedData();
 
@@ -178,8 +192,9 @@ function AppProvider({ children }) {
   const [quotations, setQuotations] = useState(() => getStore('quotations', []));
   const [invoices, setInvoices] = useState(() => getStore('invoices', []));
   
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(() => getStore('users', []));
   const [invitations, setInvitations] = useState([]);
+  const [orgDepartments, setOrgDepartments] = useState(() => getStore('orgDepartments', []));
   
   const [pipelines, setPipelines] = useState(() => getStore('pipelines', INITIAL_PIPELINES));
   const [tunnels, setTunnels] = useState(() => getStore('tunnels', INITIAL_TUNNELS));
@@ -194,11 +209,10 @@ function AppProvider({ children }) {
     const loadCloudData = async () => {
       const { data: dbUsers } = await supabase.from('users').select('*');
       if (dbUsers && dbUsers.length > 0) {
-        setUsers(dbUsers);
+        setUsers(dbUsers.map(u => ({ ...u, memberships: u.memberships || [] })));
       } else {
-        const adminUser = { name: 'Admin User', email: 'admin@nexacrm.com', phone: '+91 99999 00000', role: 'Admin', status: 'active', password: 'admin123' };
-        const { data: insertedAdmin } = await supabase.from('users').insert(adminUser).select().single();
-        if (insertedAdmin) setUsers([insertedAdmin]);
+        // Fallback to local if Supabase is empty, but ensure memberships exist
+        setUsers(prev => prev.map(u => ({ ...u, memberships: u.memberships || [] })));
       }
       const { data: dbInvites } = await supabase.from('invitations').select('*');
       if (dbInvites) setInvitations(dbInvites);
@@ -211,6 +225,8 @@ function AppProvider({ children }) {
   useEffect(() => { setStore('calls', calls) }, [calls]);
   useEffect(() => { setStore('quotations', quotations) }, [quotations]);
   useEffect(() => { setStore('invoices', invoices) }, [invoices]);
+  useEffect(() => { setStore('users', users) }, [users]);
+  useEffect(() => { setStore('orgDepartments', orgDepartments) }, [orgDepartments]);
   useEffect(() => { setStore('pipelines', pipelines) }, [pipelines]);
   useEffect(() => { setStore('tunnels', tunnels) }, [tunnels]);
   useEffect(() => { setStore('emailConfig', emailConfig) }, [emailConfig]);
@@ -255,7 +271,7 @@ function AppProvider({ children }) {
     }
   }, [tunnels, allStages, pipelines, toast, setLeads, currentUser]);
 
-  const val = useMemo(() => ({ loggedIn, setLoggedIn, currentUser, setCurrentUser, view, navigate, toasts, toast, modalContent, setModalContent, leads, setLeads, conversations, setConversations, calls, setCalls, quotations, setQuotations, invoices, setInvoices, users, setUsers, invitations, setInvitations, pipelines, setPipelines, tunnels, setTunnels, allStages, emailConfig, setEmailConfig, emailMessages, setEmailMessages, transitionLead, whatsappTarget, setWhatsappTarget }), [loggedIn, currentUser, view, toasts, modalContent, leads, conversations, calls, quotations, invoices, users, invitations, toast, navigate, pipelines, tunnels, allStages, emailConfig, emailMessages, transitionLead, whatsappTarget, setWhatsappTarget]);
+  const val = useMemo(() => ({ loggedIn, setLoggedIn, currentUser, setCurrentUser, view, navigate, toasts, toast, modalContent, setModalContent, leads, setLeads, conversations, setConversations, calls, setCalls, quotations, setQuotations, invoices, setInvoices, users, setUsers, invitations, setInvitations, orgDepartments, setOrgDepartments, pipelines, setPipelines, tunnels, setTunnels, allStages, emailConfig, setEmailConfig, emailMessages, setEmailMessages, transitionLead, whatsappTarget, setWhatsappTarget }), [loggedIn, currentUser, view, toasts, modalContent, leads, conversations, calls, quotations, invoices, users, invitations, orgDepartments, toast, navigate, pipelines, tunnels, allStages, emailConfig, emailMessages, transitionLead, whatsappTarget, setWhatsappTarget]);
 
   return <AppContext.Provider value={val}>{children}</AppContext.Provider>;
 }
@@ -353,7 +369,10 @@ function Sidebar() {
     { id: 'invoices', icon: 'fa-solid fa-receipt', label: 'Invoices', g: 'Finance' }, 
     { id: 'pipelines', icon: 'fa-solid fa-diagram-project', label: 'Pipelines', g: 'Settings' }
   ];
-  if (currentUser?.role === 'Admin') items.push({ id: 'team', icon: 'fa-solid fa-user-group', label: 'Team', g: 'Settings' });
+  if (currentUser?.role === 'Admin') {
+    items.push({ id: 'team', icon: 'fa-solid fa-user-group', label: 'Team', g: 'Settings' });
+    items.push({ id: 'org', icon: 'fa-solid fa-sitemap', label: 'Company Structure', g: 'Settings' });
+  }
   const grp = {}; items.forEach(n => { if (!grp[n.g]) grp[n.g] = []; grp[n.g].push(n); });
   const ur = emailMessages.filter(m => m.folder === 'inbox' && !m.read).length;
   return <aside id="sidebar" className="sidebar-desktop w-64 bg-sidebar flex flex-col shrink-0"><div className="p-5 flex items-center gap-3 border-b border-white/5"><div className="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center text-lg font-bold text-white">N</div><span className="text-white text-lg font-bold">NexaCRM</span></div><nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">{Object.entries(grp).map(([g, its]) => <React.Fragment key={g}><div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-3 mb-2 mt-4">{g}</div>{its.map(n => <a key={n.id} onClick={() => navigate(n.id)} className={"nav-item " + (view === n.id ? 'active' : '') + " flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-300 cursor-pointer"}><i className={n.icon + " w-5 text-center " + (n.ic || '')}></i>{n.label}{n.id === 'email' && ur > 0 && <span className="ml-auto bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">{ur}</span>}</a>)}</React.Fragment>)}</nav><div className="p-4 border-t border-white/5"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white text-sm font-bold">{currentUser?.name?.charAt(0) || 'A'}</div><div className="flex-1 min-w-0"><div className="text-sm text-white font-medium truncate">{currentUser?.name || 'Admin'}</div><div className="text-xs text-gray-500 truncate">{currentUser?.email || 'admin@nexacrm.com'}</div></div><button onClick={() => { setLoggedIn(false); setStore('session', null); setStore('currentUser', null); try { localStorage.removeItem('acemagick_session'); } catch(e){} }} className="text-gray-500 hover:text-red-400"><i className="fa-solid fa-right-from-bracket"></i></button></div></div></aside>;
@@ -674,7 +693,6 @@ function ExportModal({ leads, onClose }) {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Leads");
       
-      // XLSX writeFile triggers the download automatically
       XLSX.writeFile(wb, `NexaCRM_Leads_Export.${format}`, { bookType: format });
       toast('Export successful!');
       onClose();
@@ -1210,6 +1228,399 @@ function TunnelFormModal({ onClose, onSave, fromStageId, fromPipelineId }) {
   );
 }
 
+// --- NEW: COMPANY STRUCTURE / ORG HIERARCHY VIEW ---
+function CompanyStructureView() {
+  const { orgDepartments, setOrgDepartments, users, setUsers, toast, setModalContent } = useApp();
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const handleDrop = (e, targetDeptId) => {
+    e.preventDefault();
+    const userId = e.dataTransfer.getData('userId');
+    const fromDeptId = e.dataTransfer.getData('fromDeptId');
+    
+    if (!userId || fromDeptId === targetDeptId) return;
+
+    const user = users.find(u => u.id === userId);
+    setModalContent(
+      <MoveEmployeeModal 
+        user={user} 
+        fromDeptId={fromDeptId} 
+        toDeptId={targetDeptId} 
+        onClose={() => setModalContent(null)} 
+      />
+    );
+  };
+
+  const rootDepts = orgDepartments.filter(d => !d.parentId);
+
+  return (
+    <div className="fade-in flex flex-col gap-4 h-full">
+      <div className="flex items-center justify-between gap-4">
+        <input 
+          type="text" 
+          value={searchTerm} 
+          onChange={e => setSearchTerm(e.target.value)} 
+          placeholder="Search employee..." 
+          className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-64" 
+        />
+        <button onClick={() => setModalContent(<DeptModal onClose={() => setModalContent(null)} parentId={null} />)} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+          <i className="fa-solid fa-plus"></i>Add Department
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto pb-8">
+        <div className="space-y-4">
+          {rootDepts.map(dept => (
+            <OrgNode 
+              key={dept.id} 
+              dept={dept} 
+              allDepts={orgDepartments} 
+              users={users} 
+              depth={0} 
+              onDrop={handleDrop} 
+              searchTerm={searchTerm}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Recursive Org Node Component
+function OrgNode({ dept, allDepts, users, depth, onDrop, searchTerm }) {
+  const { setModalContent, toast } = useApp();
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const childDepts = allDepts.filter(d => d.parentId === dept.id);
+  const deptUsers = users.filter(u => u.memberships?.some(m => m.deptId === dept.id));
+  
+  const head = users.find(u => u.id === dept.headUserId);
+  const deputy = users.find(u => u.id === dept.deputyUserId);
+  const employees = deptUsers.filter(u => u.id !== dept.headUserId && u.id !== dept.deputyUserId);
+
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragOver(true); };
+  const handleDragLeave = () => setIsDragOver(false);
+
+  const removeUserFromDept = (userId) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        let memberships = (u.memberships || []).filter(m => m.deptId !== dept.id);
+        // If removed from primary, make the first remaining one primary
+        if (memberships.length > 0 && !memberships.some(m => m.isPrimary)) {
+          memberships[0].isPrimary = true;
+        }
+        return { ...u, memberships };
+      }
+      return u;
+    }));
+    toast('Employee removed from department', 'info');
+  };
+
+  return (
+    <div className={`relative pl-8 ${depth === 0 ? 'pl-0' : ''}`}>
+      {depth > 0 && (
+        <div className="absolute left-0 top-0 bottom-0 w-px bg-gray-200"></div>
+      )}
+      
+      {/* Department Card / Drop Target */}
+      <div 
+        className={`bg-white rounded-xl border ${isDragOver ? 'border-brand-500 border-dashed bg-brand-50' : 'border-gray-200'} shadow-sm p-4 mb-4 transition-all`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => { onDrop(e, dept.id); handleDragLeave(); }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            {childDepts.length > 0 && (
+              <button onClick={() => setIsExpanded(!isExpanded)} className="text-gray-400 hover:text-gray-600">
+                <i className={`fa-solid fa-chevron-${isExpanded ? 'down' : 'right'}`}></i>
+              </button>
+            )}
+            <h3 className="font-bold text-gray-800 text-base">{dept.name}</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setModalContent(<DeptModal dept={dept} onClose={() => setModalContent(null)} />)} className="text-gray-400 hover:text-blue-500 p-1.5 rounded-md hover:bg-blue-50" title="Edit Department">
+              <i className="fa-solid fa-pen text-xs"></i>
+            </button>
+            <button onClick={() => setModalContent(<DeptModal parentId={dept.id} onClose={() => setModalContent(null)} />)} className="text-gray-400 hover:text-brand-500 p-1.5 rounded-md hover:bg-brand-50" title="Add Sub-department">
+              <i className="fa-solid fa-plus text-xs"></i>
+            </button>
+            <button onClick={() => setModalContent(<AddEmpModal dept={dept} onClose={() => setModalContent(null)} />)} className="text-gray-400 hover:text-green-500 p-1.5 rounded-md hover:bg-green-50" title="Add Employee">
+              <i className="fa-solid fa-user-plus text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {head && <EmpCard user={head} role="Head" deptId={dept.id} onRemove={removeUserFromDept} isDraggable={false} />}
+          {deputy && <EmpCard user={deputy} role="Deputy" deptId={dept.id} onRemove={removeUserFromDept} isDraggable={false} />}
+          {employees.map(emp => (
+            <EmpCard key={emp.id} user={emp} role="Employee" deptId={dept.id} onRemove={removeUserFromDept} isDraggable={true} />
+          ))}
+          {deptUsers.length === 0 && <div className="text-xs text-gray-400 col-span-full text-center py-4">No employees in this department</div>}
+        </div>
+      </div>
+
+      {isExpanded && childDepts.length > 0 && (
+        <div className="ml-4 border-l-2 border-gray-100 pl-4 space-y-4">
+          {childDepts.map(child => (
+            <OrgNode 
+              key={child.id} 
+              dept={child} 
+              allDepts={allDepts} 
+              users={users} 
+              depth={depth + 1} 
+              onDrop={onDrop} 
+              searchTerm={searchTerm}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmpCard({ user, role, deptId, onRemove, isDraggable }) {
+  const { setModalContent } = useApp();
+  
+  const handleDragStart = (e) => {
+    e.dataTransfer.setData('userId', user.id);
+    e.dataTransfer.setData('fromDeptId', deptId);
+  };
+
+  return (
+    <div 
+      className="bg-gray-50 rounded-lg p-3 border border-gray-100 flex items-center gap-3 cursor-pointer hover:shadow-sm transition-all group"
+      draggable={isDraggable}
+      onDragStart={handleDragStart}
+      onClick={() => setModalContent(<EmpProfileModal user={user} onClose={() => setModalContent(null)} />)}
+    >
+      <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center text-sm font-bold text-brand-600 shrink-0">
+        {user.name?.charAt(0) || 'U'}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-gray-800 truncate">{user.name}</div>
+        <div className="text-[10px] text-gray-500 uppercase tracking-wide">{role}</div>
+      </div>
+      <button 
+        onClick={(e) => { e.stopPropagation(); onRemove(user.id); }} 
+        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Remove from dept"
+      >
+        <i className="fa-solid fa-times text-xs"></i>
+      </button>
+    </div>
+  );
+}
+
+// Modals for Company Structure
+function DeptModal({ dept, parentId, onClose }) {
+  const { orgDepartments, setOrgDepartments, users, toast } = useApp();
+  const [name, setName] = useState(dept?.name || '');
+  const [headUserId, setHeadUserId] = useState(dept?.headUserId || '');
+  const [deputyUserId, setDeputyUserId] = useState(dept?.deputyUserId || '');
+
+  const save = () => {
+    if (!name.trim()) { toast('Department name required', 'error'); return; }
+    
+    if (dept) {
+      // Edit
+      setOrgDepartments(prev => prev.map(d => d.id === dept.id ? { ...d, name, headUserId: headUserId || null, deputyUserId: deputyUserId || null } : d));
+      toast('Department updated');
+    } else {
+      // Create
+      const newDept = { id: genId(), name, parentId: parentId, headUserId: headUserId || null, deputyUserId: deputyUserId || null };
+      setOrgDepartments(prev => [...prev, newDept]);
+      toast('Department created');
+    }
+    onClose();
+  };
+
+  return (
+    <div className="p-6 max-w-md mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-800">{dept ? 'Edit Department' : 'Add Department'}</h2>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div className="space-y-4">
+        <div>
+          <label className="text-xs font-medium text-gray-500 mb-1 block">Department Name *</label>
+          <input value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="e.g. Sales Department" />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-500 mb-1 block">Department Head</label>
+          <select value={headUserId} onChange={e => setHeadUserId(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white">
+            <option value="">-- Select Head --</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-500 mb-1 block">Deputy Supervisor</label>
+          <select value={deputyUserId} onChange={e => setDeputyUserId(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white">
+            <option value="">-- Select Deputy --</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </div>
+        <button onClick={save} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600">Save</button>
+      </div>
+    </div>
+  );
+}
+
+function AddEmpModal({ dept, onClose }) {
+  const { users, setUsers, toast } = useApp();
+  const [search, setSearch] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+
+  const filteredUsers = users.filter(u => 
+    u.name.toLowerCase().includes(search.toLowerCase()) || 
+    u.email.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const addEmployee = () => {
+    if (!selectedUserId) { toast('Please select an employee', 'error'); return; }
+    
+    setUsers(prev => prev.map(u => {
+      if (u.id === selectedUserId) {
+        const memberships = u.memberships || [];
+        if (memberships.some(m => m.deptId === dept.id)) {
+          toast('Employee already in this department', 'error');
+          return u;
+        }
+        // If no primary exists, make this primary
+        const hasPrimary = memberships.some(m => m.isPrimary);
+        memberships.push({ deptId: dept.id, role: 'employee', isPrimary: !hasPrimary });
+        return { ...u, memberships };
+      }
+      return u;
+    }));
+    
+    toast('Employee added to department');
+    onClose();
+  };
+
+  return (
+    <div className="p-6 max-w-md mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-800">Add Employee to {dept.name}</h2>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div className="space-y-4">
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee..." className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" />
+        <div className="border border-gray-200 rounded-xl max-h-60 overflow-y-auto">
+          {filteredUsers.map(u => (
+            <div 
+              key={u.id} 
+              onClick={() => setSelectedUserId(u.id)} 
+              className={`p-3 cursor-pointer border-b border-gray-50 ${selectedUserId === u.id ? 'bg-brand-50' : 'hover:bg-gray-50'}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{u.name.charAt(0)}</div>
+                <div>
+                  <div className="text-sm font-medium text-gray-800">{u.name}</div>
+                  <div className="text-xs text-gray-400">{u.email}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={addEmployee} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600">Add to Department</button>
+      </div>
+    </div>
+  );
+}
+
+function MoveEmployeeModal({ user, fromDeptId, toDeptId, onClose }) {
+  const { orgDepartments, setUsers, toast } = useApp();
+  const fromDept = orgDepartments.find(d => d.id === fromDeptId);
+  const toDept = orgDepartments.find(d => d.id === toDeptId);
+
+  const handleAction = (action) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id === user.id) {
+        let memberships = [...(u.memberships || [])];
+        
+        if (action === 'move') {
+          // Remove from old dept
+          memberships = memberships.filter(m => m.deptId !== fromDeptId);
+          // Add to new dept
+          const hasPrimary = memberships.some(m => m.isPrimary);
+          memberships.push({ deptId: toDeptId, role: 'employee', isPrimary: !hasPrimary });
+          toast(`Moved ${user.name} to ${toDept.name}`);
+        } else {
+          // Add to new dept (keep old)
+          if (!memberships.some(m => m.deptId === toDeptId)) {
+            memberships.push({ deptId: toDeptId, role: 'employee', isPrimary: false });
+            toast(`Added ${user.name} to ${toDept.name}`);
+          } else {
+            toast('Already in this department', 'error');
+          }
+        }
+        return { ...u, memberships };
+      }
+      return u;
+    }));
+    onClose();
+  };
+
+  return (
+    <div className="p-6 max-w-md mx-auto text-center">
+      <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center mx-auto mb-4"><i className="fa-solid fa-arrows-up-down-left-right text-brand-600 text-2xl"></i></div>
+      <h2 className="text-xl font-bold text-gray-800 mb-2">Transfer Employee</h2>
+      <p className="text-sm text-gray-500 mb-6">What do you want to do with <b>{user.name}</b>?</p>
+      <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-600 mb-6">
+        From: <b>{fromDept?.name}</b><br/>
+        To: <b>{toDept?.name}</b>
+      </div>
+      <div className="flex gap-3">
+        <button onClick={() => handleAction('move')} className="flex-1 bg-brand-500 hover:bg-brand-600 text-white px-4 py-3 rounded-xl text-sm font-medium">Move</button>
+        <button onClick={() => handleAction('add')} className="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-3 rounded-xl text-sm font-medium">Add (Multi-dept)</button>
+      </div>
+      <button onClick={onClose} className="mt-4 text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+    </div>
+  );
+}
+
+function EmpProfileModal({ user, onClose }) {
+  const { orgDepartments } = useApp();
+  return (
+    <div className="p-6 max-w-md mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-800">Employee Profile</h2>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div className="flex items-center gap-4 mb-6">
+        <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center text-2xl font-bold text-brand-600">{user.name?.charAt(0) || 'U'}</div>
+        <div>
+          <h3 className="text-lg font-bold text-gray-800">{user.name}</h3>
+          <p className="text-sm text-gray-500">{user.email}</p>
+          <p className="text-sm text-gray-500">{user.phone}</p>
+        </div>
+      </div>
+      <div>
+        <h4 className="text-xs font-semibold text-gray-400 uppercase mb-2">Department Memberships</h4>
+        <div className="space-y-2">
+          {user.memberships?.map(m => {
+            const dept = orgDepartments.find(d => d.id === m.deptId);
+            return (
+              <div key={m.deptId} className="bg-gray-50 p-3 rounded-lg flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-gray-800">{dept?.name || 'Unknown'}</div>
+                  <div className="text-xs text-gray-500 capitalize">{m.role} {m.isPrimary && '• Primary'}</div>
+                </div>
+              </div>
+            );
+          })}
+          {user.memberships?.length === 0 && <div className="text-xs text-gray-400 text-center py-4">No department assigned</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+// --- END COMPANY STRUCTURE ---
+
 function WhatsAppView() {
   const { toast, leads, setLeads, currentUser, whatsappTarget, setWhatsappTarget } = useApp();
   const [config, setConfig] = useState(() => getStore('whatsappConfig', { instanceId: '', token: '' }));
@@ -1586,6 +1997,7 @@ function App() {
       case 'quotations': return <QuotationsView />; 
       case 'invoices': return <InvoicesView />; 
       case 'team': return <TeamView />; 
+      case 'org': return <CompanyStructureView />;
       default: return <Dashboard />; 
     } 
   };
