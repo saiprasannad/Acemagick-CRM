@@ -16,7 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-tailwind.config={theme:{extend:{colors:{brand:{50:'#ecfdf5',100:'#d1fae5',200:'#a7f3d0',300:'#6ee7b7',400:'#34d399',500:'#10b981',600:'#059669',700:'#047857',800:'#065f46',900:'#064e3b'},sidebar:'#0B1120'},fontFamily:{sans:['DM Sans','sans-serif']}}}}
+tailwind.config={theme:{extend:{colors:{brand:{50:'#ecfdf5',100:'#d1fae5',200:'#a7f3d0',300:'#6ee7b7',400:'#34d399',500:'#10b981',600:'#059669',700:'#047857',800:'#065f46',900:'#064e3b'},sidebar:'#0B1120'},fontFamily:{sans:['DM Sans','sans-serif']}}} }
 </script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',sans-serif;background:#F4F6FA;overflow:hidden;height:100vh}
@@ -39,14 +39,6 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#10b981;box-sh
 .tunnel-line{position:absolute;top:50%;right:-24px;width:24px;height:2px;background:#10b981;z-index:10}
 .tunnel-line::after{content:'';position:absolute;right:0;top:-4px;width:0;height:0;border-left:8px solid #10b981;border-top:5px solid transparent;border-bottom:5px solid transparent}
 @media(max-width:768px){.sidebar-desktop{transform:translateX(-100%);position:fixed;z-index:90;height:100vh}.sidebar-desktop.open{transform:translateX(0)}}
-/* Bitrix24 Style Org Tree CSS */
-.org-tree-node { position: relative; display: flex; flex-direction: column; align-items: center; padding-top: 40px; }
-.org-tree-node.is-root { padding-top: 0; }
-.org-tree-node:not(.is-root)::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 20px; background: #CBD5E1; transform: translateX(-1px); }
-.org-tree-children { display: flex; justify-content: center; gap: 50px; position: relative; padding-top: 40px; }
-.org-tree-children::before { content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 20px; background: #CBD5E1; transform: translateX(-1px); }
-.org-tree-children::after { content: ''; position: absolute; top: 20px; left: 50%; height: 2px; background: #CBD5E1; width: 100%; transform: translateX(-50%); max-width: calc(100% - 50px); }
-.org-tree-children:has(> .org-tree-node:only-child)::after { display: none; }
 </style>
 </head>
 <body>
@@ -135,7 +127,7 @@ const INITIAL_TUNNELS = [
 ];
 
 function seedData() {
-  if (getStore('v12', null)) return; 
+  if (getStore('v13', null)) return; 
   const leads = [
     { id: 'l1', name: 'Priya Sharma', phone: '+91 98765 43210', email: 'priya@example.com', company: 'TechStart', interest: 'Web Development', budget: '₹2,00,000', timeline: '1 month', source: 'WhatsApp', stage: 'new', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 2, updatedAt: Date.now() - 864e5, notes: '', activities: [{ type: 'whatsapp', text: 'AI bot initiated', at: Date.now() - 864e5 * 2 }] },
     { id: 'l2', name: 'Rahul Mehta', phone: '+91 87654 32109', email: 'rahul@mehta.in', company: 'Mehta Industries', interest: 'Mobile App', budget: '₹5,00,000', timeline: '2-3 months', source: 'Website', stage: 'contacted', assignedTo: 'u1', createdAt: Date.now() - 864e5 * 5, updatedAt: Date.now() - 864e5 * 3, notes: '', activities: [{ type: 'call', text: 'Outbound call', at: Date.now() - 864e5 * 4 }] },
@@ -161,16 +153,19 @@ function seedData() {
   
   const orgDepartments = [
     { id: 'org_root', name: 'Acemagick', parentId: null, headUserId: 'u1', deputyUserId: null },
-    { id: 'org_sales', name: 'Sales', parentId: 'org_root', headUserId: null, deputyUserId: null },
-    { id: 'org_tech', name: 'Technology', parentId: 'org_root', headUserId: null, deputyUserId: null },
-    { id: 'org_mkt', name: 'Marketing', parentId: 'org_root', headUserId: null, deputyUserId: null },
-    { id: 'org_frontend', name: 'Frontend Team', parentId: 'org_tech', headUserId: null, deputyUserId: null }
+    { id: 'org_sales', name: 'Sales', parentId: 'org_root', headUserId: 'u2', deputyUserId: null },
+    { id: 'org_marketing', name: 'Marketing', parentId: 'org_root', headUserId: null, deputyUserId: null },
+    { id: 'org_bos', name: 'BOS', parentId: 'org_root', headUserId: null, deputyUserId: null },
+    { id: 'org_si', name: 'Super Intelligence', parentId: 'org_root', headUserId: null, deputyUserId: null },
+    { id: 'org_bitrix24', name: 'Bitrix24', parentId: 'org_marketing', headUserId: null, deputyUserId: null },
+    { id: 'org_sciqus', name: 'Sciqus AMS', parentId: 'org_marketing', headUserId: null, deputyUserId: null },
+    { id: 'org_analytics', name: 'Analytics Studio', parentId: 'org_marketing', headUserId: null, deputyUserId: null }
   ];
   
   const users = [
-    { id: 'u1', name: 'Admin User', email: 'admin@nexacrm.com', phone: '+91 99999 00000', role: 'Admin', status: 'active', password: 'admin123', invitedAt: Date.now() - 864e5 * 60, joinedAt: Date.now() - 864e5 * 60, memberships: [{ deptId: 'org_root', role: 'head', isPrimary: true }] },
-    { id: 'u2', name: 'Sales Agent', email: 'sales@nexacrm.com', phone: '+91 99999 00001', role: 'Agent', status: 'active', password: 'agent123', invitedAt: Date.now() - 864e5 * 50, joinedAt: Date.now() - 864e5 * 50, memberships: [{ deptId: 'org_sales', role: 'employee', isPrimary: true }] },
-    { id: 'u3', name: 'Tech Lead', email: 'tech@nexacrm.com', phone: '+91 99999 00002', role: 'Agent', status: 'active', password: 'tech123', invitedAt: Date.now() - 864e5 * 50, joinedAt: Date.now() - 864e5 * 50, memberships: [{ deptId: 'org_tech', role: 'employee', isPrimary: true }] }
+    { id: 'u1', name: 'Sooraj Sairam Aanand', email: 'founder@acemagick.com', phone: '+91 99999 00000', role: 'Admin', status: 'active', password: 'admin123', invitedAt: Date.now() - 864e5 * 60, joinedAt: Date.now() - 864e5 * 60, memberships: [{ deptId: 'org_root', role: 'head', isPrimary: true }] },
+    { id: 'u2', name: 'Sai Prasanna Kolluru', email: 'sai@acemagick.com', phone: '+91 99999 00001', role: 'Agent', status: 'active', password: 'agent123', invitedAt: Date.now() - 864e5 * 50, joinedAt: Date.now() - 864e5 * 50, memberships: [{ deptId: 'org_sales', role: 'head', isPrimary: true }] },
+    { id: 'u3', name: 'Tech Lead', email: 'tech@nexacrm.com', phone: '+91 99999 00002', role: 'Agent', status: 'active', password: 'tech123', invitedAt: Date.now() - 864e5 * 50, joinedAt: Date.now() - 864e5 * 50, memberships: [{ deptId: 'org_bos', role: 'employee', isPrimary: true }] }
   ];
   
   setStore('leads', leads); 
@@ -184,7 +179,7 @@ function seedData() {
   setStore('tunnels', INITIAL_TUNNELS);
   setStore('orgDepartments', orgDepartments);
   setStore('users', users);
-  setStore('v12', true);
+  setStore('v13', true);
 }
 seedData();
 
@@ -1236,10 +1231,26 @@ function TunnelFormModal({ onClose, onSave, fromStageId, fromPipelineId }) {
 function CompanyStructureView() {
   const { orgDepartments, users, setModalContent } = useApp();
   const [selectedDeptId, setSelectedDeptId] = useState(null);
+  const [activeDeptId, setActiveDeptId] = useState(null);
   const [isDragOver, setIsDragOver] = useState(null);
 
   const rootDept = orgDepartments.find(d => !d.parentId);
-  const selectedDept = orgDepartments.find(d => d.id === selectedDeptId) || rootDept;
+  const activeDept = orgDepartments.find(d => d.id === activeDeptId) || rootDept;
+  const selectedDept = orgDepartments.find(d => d.id === selectedDeptId) || activeDept;
+
+  const childDepts = orgDepartments.filter(d => d.parentId === activeDept.id);
+
+  // Breadcrumbs logic
+  const getBreadcrumbs = (dept) => {
+    let crumbs = [];
+    let current = dept;
+    while (current) {
+      crumbs.unshift(current);
+      current = orgDepartments.find(d => d.id === current.parentId);
+    }
+    return crumbs;
+  };
+  const breadcrumbs = getBreadcrumbs(activeDept);
 
   const handleDrop = (e, targetDeptId) => {
     e.preventDefault();
@@ -1258,20 +1269,75 @@ function CompanyStructureView() {
   return (
     <div className="fade-in flex h-full">
       {/* Tree Structure Area */}
-      <div className="flex-1 overflow-auto p-8 flex flex-col items-center min-w-0">
-        {rootDept ? (
-          <OrgTreeNode 
-            dept={rootDept} 
-            onSelect={setSelectedDeptId} 
-            selectedId={selectedDeptId} 
-            isRoot={true} 
-            onDrop={handleDrop}
-            isDragOver={isDragOver}
-            setIsDragOver={setIsDragOver}
-          />
+      <div className="flex-1 overflow-auto p-8 flex flex-col min-w-0">
+        
+        {/* Breadcrumbs */}
+        <div className="flex items-center gap-2 mb-6 text-sm">
+          {breadcrumbs.map((c, i) => (
+            <React.Fragment key={c.id}>
+              {i > 0 && <i className="fa-solid fa-chevron-right text-xs text-gray-400"></i>}
+              <button onClick={() => { setActiveDeptId(c.id); setSelectedDeptId(c.id); }} className={`font-medium ${activeDept.id === c.id ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700'}`}>{c.name}</button>
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* Active Department Card (Large) */}
+        <div className="mb-8 w-full max-w-md">
+          <div className="p-5 rounded-xl border-2 border-brand-500 bg-brand-50 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-brand-600">
+              <i className="fa-solid fa-building text-xl"></i>
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-gray-800">{activeDept.name}</h3>
+              <p className="text-xs text-gray-500 mt-1">{users.filter(u => u.memberships?.some(m => m.deptId === activeDept.id)).length} Employees · {orgDepartments.filter(d => d.parentId === activeDept.id).length} Sub-departments</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Grid of Children */}
+        {childDepts.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {childDepts.map(child => {
+              const empCount = users.filter(u => u.memberships?.some(m => m.deptId === child.id)).length;
+              const subDeptCount = orgDepartments.filter(d => d.parentId === child.id).length;
+              const isSelected = selectedDept.id === child.id;
+              const isDragOverChild = isDragOver === child.id;
+
+              return (
+                <div 
+                  key={child.id} 
+                  onClick={() => setSelectedDeptId(child.id)}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(child.id); }}
+                  onDragLeave={() => setIsDragOver(null)}
+                  onDrop={(e) => handleDrop(e, child.id)}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md ${isSelected ? 'border-brand-500 bg-brand-50' : 'border-gray-200 bg-white'} ${isDragOverChild ? 'border-brand-500 bg-brand-50 scale-105' : ''}`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-gray-800">{child.name}</h4>
+                    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
+                      <i className="fa-solid fa-folder text-sm"></i>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <span><i className="fa-solid fa-user-group mr-1"></i>{empCount} Employees</span>
+                    {subDeptCount > 0 && <span><i className="fa-solid fa-sitemap mr-1"></i>{subDeptCount} Sub-depts</span>}
+                  </div>
+                  {subDeptCount > 0 && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setActiveDeptId(child.id); setSelectedDeptId(child.id); }}
+                      className="mt-3 w-full text-xs text-brand-600 bg-brand-50 hover:bg-brand-100 py-1.5 rounded-md font-medium flex items-center justify-center gap-1"
+                    >
+                      View Sub-departments <i className="fa-solid fa-arrow-right ml-1"></i>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         ) : (
-          <div className="text-center text-gray-400 mt-20">
-            <p>No company structure found. Please check your data.</p>
+          <div className="text-center text-gray-400 mt-10">
+            <i className="fa-solid fa-folder-open text-4xl mb-3 text-gray-300"></i>
+            <p className="text-sm">No sub-departments in {activeDept.name}</p>
           </div>
         )}
       </div>
@@ -1280,49 +1346,6 @@ function CompanyStructureView() {
       <div className="w-96 border-l border-gray-100 bg-white p-6 overflow-y-auto shrink-0">
         {selectedDept ? <DeptDetailPanel dept={selectedDept} /> : <div className="text-center text-gray-400 mt-20">Select a department</div>}
       </div>
-    </div>
-  );
-}
-
-function OrgTreeNode({ dept, onSelect, selectedId, isRoot, onDrop, isDragOver, setIsDragOver }) {
-  const { orgDepartments, users } = useApp();
-  const childDepts = orgDepartments.filter(d => d.parentId === dept.id);
-  const isSelected = selectedId === dept.id;
-  const empCount = users.filter(u => u.memberships?.some(m => m.deptId === dept.id)).length;
-
-  const handleDragOver = (e) => { e.preventDefault(); setIsDragOver(dept.id); };
-  const handleDragLeave = () => setIsDragOver(null);
-
-  return (
-    <div className={`org-tree-node ${isRoot ? 'is-root' : ''}`}>
-      <div 
-        className={`relative z-10 p-4 rounded-xl border-2 cursor-pointer w-48 flex flex-col items-center transition-all hover:shadow-md ${isSelected ? 'border-brand-500 bg-brand-50 shadow-sm' : 'border-gray-200 bg-white'} ${isDragOver === dept.id ? 'border-brand-500 bg-brand-50' : ''}`}
-        onClick={() => onSelect(dept.id)}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={(e) => onDrop(e, dept.id)}
-      >
-        <i className="fa-solid fa-building text-2xl text-gray-400 mb-2"></i>
-        <h3 className="font-bold text-sm text-gray-800 text-center">{dept.name}</h3>
-        <p className="text-[10px] text-gray-400 mt-1">{empCount} employees</p>
-      </div>
-
-      {childDepts.length > 0 && (
-        <div className="org-tree-children">
-          {childDepts.map(child => (
-            <OrgTreeNode 
-              key={child.id} 
-              dept={child} 
-              onSelect={onSelect} 
-              selectedId={selectedId} 
-              isRoot={false} 
-              onDrop={onDrop}
-              isDragOver={isDragOver}
-              setIsDragOver={setIsDragOver}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -1363,7 +1386,7 @@ function DeptDetailPanel({ dept }) {
           <div className="text-[10px] text-gray-500 uppercase tracking-wide">Total</div>
         </div>
         <div className="bg-gray-50 p-3 rounded-lg text-center">
-          <div className="text-xl font-bold text-gray-800">{head ? 1 : 0}</div>
+          <div className="text-xl font-bold text-gray-800">{(head ? 1 : 0) + (deputy ? 1 : 0)}</div>
           <div className="text-[10px] text-gray-500 uppercase tracking-wide">Supervisors</div>
         </div>
         <div className="bg-gray-50 p-3 rounded-lg text-center">
@@ -1372,11 +1395,12 @@ function DeptDetailPanel({ dept }) {
         </div>
       </div>
 
+      <button onClick={() => setModalContent(<AddEmpModal dept={dept} onClose={() => setModalContent(null)} />)} className="w-full bg-brand-50 text-brand-600 hover:bg-brand-100 py-2.5 rounded-lg text-sm font-medium mb-6 flex items-center justify-center gap-2">
+        <i className="fa-solid fa-plus"></i> Add employees
+      </button>
+
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Employees</h4>
-          <button onClick={() => setModalContent(<AddEmpModal dept={dept} onClose={() => setModalContent(null)} />)} className="text-xs text-brand-600 font-medium hover:text-brand-700">+ Add</button>
-        </div>
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Employees</h4>
         <div className="space-y-2">
           {head && <EmpRow user={head} role="Head" deptId={dept.id} onRemove={removeUserFromDept} />}
           {deputy && <EmpRow user={deputy} role="Deputy" deptId={dept.id} onRemove={removeUserFromDept} />}
@@ -1767,7 +1791,7 @@ function QuotationsView() { const { quotations, setQuotations, leads, toast, set
 
 function QuotationPreview({ quotation }) { const { setModalContent, toast } = useApp(); const pdfRef = useRef(null); const [dl, setDl] = useState(false); const subtotal = quotation.items.reduce((s, i) => s + i.qty * i.rate, 0); const taxAmt = subtotal * (quotation.tax || 18) / 100; const grandTotal = subtotal + taxAmt; const handleDownload = async () => { setDl(true); try { await html2pdf().set({ margin: [0, 0, 0, 0], filename: 'Quotation-' + quotation.number + '.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(pdfRef.current).save(); toast('PDF downloaded'); } catch (e) { toast('Failed', 'error'); } setDl(false); }; return (<div className="p-0"><div className="flex items-center justify-between p-5 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-800">Quotation Preview</h2><div className="flex items-center gap-2"><button onClick={handleDownload} disabled={dl} className="bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300 text-white px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><i className={"fa-solid " + (dl ? 'fa-spinner fa-spin' : 'fa-download')}></i>{dl ? 'Generating...' : 'Download PDF'}</button><button onClick={() => setModalContent(null)} className="text-gray-400 hover:text-gray-600 p-1"><i className="fa-solid fa-xmark text-lg"></i></button></div></div><div className="p-6 bg-gray-100 flex justify-center overflow-y-auto max-h-[75vh]"><div ref={pdfRef} style={{ width: '794px', minHeight: '1123px', padding: '48px', background: '#fff', fontFamily: 'DM Sans, sans-serif' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px' }}><div><div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}><div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '22px', fontWeight: 700 }}>N</div><span style={{ fontSize: '24px', fontWeight: 700, color: '#0B1120' }}>NexaCRM</span></div><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>123 Business Avenue, Bengaluru</p><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>admin@nexacrm.com</p></div><div style={{ textAlign: 'right' }}><h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0B1120', margin: 0 }}>QUOTATION</h1><p style={{ fontSize: '14px', color: '#10b981', fontWeight: 600, margin: '4px 0 16px' }}>{quotation.number}</p><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Date: {fmtDate(quotation.createdAt)}</p></div></div><div style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', marginBottom: '32px', border: '1px solid #e2e8f0' }}><p style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' }}>Bill To</p><p style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>{quotation.customerName}</p><p style={{ fontSize: '13px', color: '#64748b', margin: '2px 0 0' }}>{quotation.customerEmail}</p></div><table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '13px' }}><thead><tr style={{ background: '#0B1120' }}><th style={{ padding: '12px', textAlign: 'left', color: '#fff', fontWeight: 600, fontSize: '12px' }}>#</th><th style={{ padding: '12px', textAlign: 'left', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Description</th><th style={{ padding: '12px', textAlign: 'center', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Qty</th><th style={{ padding: '12px', textAlign: 'right', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Rate</th><th style={{ padding: '12px', textAlign: 'right', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Amount</th></tr></thead><tbody>{quotation.items.map((item, idx) => <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}><td style={{ padding: '14px 12px', color: '#94a3b8' }}>{idx + 1}</td><td style={{ padding: '14px 12px', color: '#1e293b', fontWeight: 500 }}>{item.desc}</td><td style={{ padding: '14px 12px', textAlign: 'center', color: '#475569' }}>{item.qty}</td><td style={{ padding: '14px 12px', textAlign: 'right', color: '#475569' }}>{fmtCur(item.rate)}</td><td style={{ padding: '14px 12px', textAlign: 'right', color: '#1e293b', fontWeight: 600 }}>{fmtCur(item.qty * item.rate)}</td></tr>)}</tbody></table><div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '40px' }}><table style={{ fontSize: '13px', borderCollapse: 'collapse', minWidth: '260px' }}><tbody><tr><td style={{ padding: '8px 0', color: '#64748b' }}>Subtotal</td><td style={{ padding: '8px 16px', textAlign: 'right', color: '#1e293b', fontWeight: 500 }}>{fmtCur(subtotal)}</td></tr><tr><td style={{ padding: '8px 0', color: '#64748b' }}>Tax ({quotation.tax || 18}%)</td><td style={{ padding: '8px 16px', textAlign: 'right', color: '#1e293b', fontWeight: 500 }}>{fmtCur(taxAmt)}</td></tr><tr style={{ borderTop: '2px solid #0B1120' }}><td style={{ padding: '12px 0', color: '#0B1120', fontWeight: 700, fontSize: '15px' }}>Grand Total</td><td style={{ padding: '12px 16px', textAlign: 'right', color: '#0B1120', fontWeight: 800, fontSize: '18px' }}>{fmtCur(grandTotal)}</td></tr></tbody></table></div></div></div></div>); }
 
-function InvoicesView() { const { invoices, setInvoices, quotations, toast, setModalContent } = useApp(); const [form, setForm] = useState(null); const startCreate = () => { setForm({ number: 'INV-' + String(invoices.length + 1).padStart(3, '0'), quotationId: '', leadId: '', customerName: '', customerEmail: '', items: [{ desc: '', qty: 1, rate: 0 }], tax: 18, status: 'unpaid', dueDate: Date.now() + 864e5 * 30 }) }; const linkQuotation = (qId) => { const q = quotations.find(x => x.id === qId); if (q) setForm(prev => ({ ...prev, quotationId: qId, customerName: q.customerName, customerEmail: q.customerEmail, items: [...q.items], tax: q.tax })); }; const saveInvoice = () => { if (!form.customerName.trim()) { toast('Customer required', 'error'); return; } setInvoices(prev => [...prev, { ...form, id: genId(), createdAt: Date.now() }]); toast('Created'); setForm(null); }; const markPaid = (id) => { setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: 'paid', paidAt: Date.now() } : i)); toast('Paid'); }; const deleteInv = (id) => { setInvoices(prev => prev.filter(i => i.id !== id)); toast('Deleted', 'info'); }; const addItem = () => setForm(prev => ({ ...prev, items: [...prev.items, { desc: '', qty: 1, rate: 0 }] })); const removeItem = (idx) => setForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) })); const setItem = (idx, key, val) => setForm(prev => ({ ...prev, items: prev.items.map((it, i) => i === idx ? { ...it, [key]: val } : it) })); const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v })); const statusColors = { unpaid: 'bg-amber-100 text-amber-700', paid: 'bg-green-100 text-green-700' }; if (form) return (<div className="fade-in bg-white rounded-2xl p-6 border border-gray-100 shadow-sm max-w-3xl"><h3 className="text-lg font-bold text-gray-800 mb-5">Create Invoice</h3><div className="grid grid-cols-2 gap-4 mb-5"><div><label className="text-xs font-medium text-gray-500 mb-1 block">Number</label><input value={form.number} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50" readOnly /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">From Quotation</label><select value={form.quotationId} onChange={e => linkQuotation(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white"><option value="">-- Select --</option>{quotations.filter(q => q.status === 'accepted').map(q => <option key={q.id} value={q.id}>{q.number}</option>)}</select></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Customer *</label><input value={form.customerName} onChange={e => setField('customerName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Email</label><input value={form.customerEmail} onChange={e => setField('customerEmail', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Due Date</label><input type="date" value={form.dueDate ? new Date(form.dueDate).toISOString().split('T')[0] : ''} onChange={e => setField('dueDate', new Date(e.target.value).getTime())} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Tax %</label><input type="number" value={form.tax} onChange={e => setField('tax', Number(e.target.value))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div></div><div className="mb-5"><div className="flex items-center justify-between mb-2"><label className="text-xs font-semibold text-gray-500 uppercase">Items</label><button onClick={addItem} className="text-xs text-brand-500 font-medium"><i className="fa-solid fa-plus mr-1"></i>Add</button></div><div className="space-y-2">{form.items.map((item, idx) => (<div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-5"><input value={item.desc} onChange={e => setItem(idx, 'desc', e.target.value)} placeholder="Description" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-2"><input type="number" min="1" value={item.qty} onChange={e => setItem(idx, 'qty', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-3"><input type="number" value={item.rate} onChange={e => setItem(idx, 'rate', Number(e.target.value))} className="w-full border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-1 text-right text-sm font-medium text-gray-700">{fmtCur(item.qty * item.rate)}</div><div className="col-span-1 text-right"><button onClick={() => removeItem(idx)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></div>))}</div><div className="mt-3 pt-3 border-t border-gray-100 text-right"><div className="text-base font-bold text-gray-800">Total: {fmtCur(form.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + form.tax / 100))}</div></div></div><div className="flex gap-3"><button onClick={saveInvoice} className="bg-brand-500 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-600">Create</button><button onClick={() => setForm(null)} className="bg-gray-100 text-gray-600 px-6 py-2.5 rounded-xl text-sm font-medium">Cancel</button></div></div>); return (<div className="fade-in"><div className="flex items-center justify-between mb-5"><div className="text-sm text-gray-500">{invoices.length} invoice(s)</div><button onClick={startCreate} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Create</button></div><div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase"><th className="px-5 py-3">Number</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead><tbody>{invoices.map(inv => { const total = inv.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + (inv.tax || 18) / 100); return (<tr key={inv.id} className="border-t border-gray-50 hover:bg-gray-50/50"><td className="px-5 py-3 font-medium text-gray-800">{inv.number}</td><td className="px-5 py-3 text-gray-700">{inv.customerName}</td><td className="px-5 py-3 font-semibold text-gray-800">{fmtCur(total)}</td><td className="px-5 py-3"><span className={"px-2.5 py-1 rounded-full text-xs font-semibold " + (statusColors[inv.status] || 'bg-gray-100 text-gray-600')}>{inv.status}</span></td><td className="px-5 py-3"><div className="flex items-center gap-2"><button onClick={() => setModalContent(<InvoicePreview invoice={inv} />)} className="text-brand-500 hover:text-brand-600" title="PDF"><i className="fa-solid fa-file-pdf"></i></button>{inv.status === 'unpaid' && <button onClick={() => markPaid(inv.id)} className="text-green-500 hover:text-green-600"><i className="fa-solid fa-check-circle"></i></button>}<button onClick={() => deleteInv(inv.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></td></tr>); })}</tbody></table></div></div>); }
+function InvoicesView() { const { invoices, setInvoices, quotations, toast, setModalContent } = useApp(); const [form, setForm] = useState(null); const startCreate = () => { setForm({ number: 'INV-' + String(invoices.length + 1).padStart(3, '0'), quotationId: '', leadId: '', customerName: '', customerEmail: '', items: [{ desc: '', qty: 1, rate: 0 }], tax: 18, status: 'unpaid', dueDate: Date.now() + 864e5 * 30 }) }; const linkQuotation = (qId) => { const q = quotations.find(x => x.id === qId); if (q) setForm(prev => ({ ...prev, quotationId: qId, customerName: q.customerName, customerEmail: q.customerEmail, items: [...q.items], tax: q.tax })); }; const saveInvoice = () => { if (!form.customerName.trim()) { toast('Customer required', 'error'); return; } setInvoices(prev => [...prev, { ...form, id: genId(), createdAt: Date.now() }]); toast('Created'); setForm(null); }; const markPaid = (id) => { setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: 'paid', paidAt: Date.now() } : i)); toast('Paid'); }; const deleteInv = (id) => { setInvoices(prev => prev.filter(i => i.id !== id)); toast('Deleted', 'info'); }; const addItem = () => setForm(prev => ({ ...prev, items: [...prev.items, { desc: '', qty: 1, rate: 0 }] })); const removeItem = (idx) => setForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) })); const setItem = (idx, key, val) => setForm(prev => ({ ...prev, items: prev.items.map((it, i) => i === idx ? { ...it, [key]: val } : it) })); const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v })); const statusColors = { unpaid: 'bg-amber-100 text-amber-700', paid: 'bg-green-100 text-green-700' }; if (form) return (<div className="fade-in bg-white rounded-2xl p-6 border border-gray-100 shadow-sm max-w-3xl"><h3 className="text-lg font-bold text-gray-800 mb-5">Create Invoice</h3><div className="grid grid-cols-2 gap-4 mb-5"><div><label className="text-xs font-medium text-gray-500 mb-1 block">Number</label><input value={form.number} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50" readOnly /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">From Quotation</label><select value={form.quotationId} onChange={e => linkQuotation(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white"><option value="">-- Select --</option>{quotations.filter(q => q.status === 'accepted').map(q => <option key={q.id} value={q.id}>{q.number}</option>)}</select></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Customer *</label><input value={form.customerName} onChange={e => setField('customerName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Email</label><input value={form.customerEmail} onChange={e => setField('customerEmail', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Due Date</label><input type="date" value={form.dueDate ? new Date(form.dueDate).toISOString().split('T')[0] : ''} onChange={e => setField('dueDate', new Date(e.target.value).getTime())} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Tax %</label><input type="number" value={form.tax} onChange={e => setField('tax', Number(e.target.value))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div></div><div className="mb-5"><div className="flex items-center justify-between mb-2"><label className="text-xs font-semibold text-gray-500 uppercase">Items</label><button onClick={addItem} className="text-xs text-brand-500 font-medium"><i className="fa-solid fa-plus mr-1"></i>Add</button></div><div className="space-y-2">{form.items.map((item, idx) => (<div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-5"><input value={item.desc} onChange={e => setItem(idx, 'desc', e.target.value)} placeholder="Description" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-2"><input type="number" min="1" value={item.qty} onChange={e => setItem(idx, 'qty', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-3"><input type="number" value={item.rate} onChange={e => setItem(idx, 'rate', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-1 text-right text-sm font-medium text-gray-700">{fmtCur(item.qty * item.rate)}</div><div className="col-span-1 text-right"><button onClick={() => removeItem(idx)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></div>))}</div><div className="mt-3 pt-3 border-t border-gray-100 text-right"><div className="text-base font-bold text-gray-800">Total: {fmtCur(form.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + form.tax / 100))}</div></div></div><div className="flex gap-3"><button onClick={saveInvoice} className="bg-brand-500 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-600">Create</button><button onClick={() => setForm(null)} className="bg-gray-100 text-gray-600 px-6 py-2.5 rounded-xl text-sm font-medium">Cancel</button></div></div>); return (<div className="fade-in"><div className="flex items-center justify-between mb-5"><div className="text-sm text-gray-500">{invoices.length} invoice(s)</div><button onClick={startCreate} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Create</button></div><div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase"><th className="px-5 py-3">Number</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead><tbody>{invoices.map(inv => { const total = inv.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + (inv.tax || 18) / 100); return (<tr key={inv.id} className="border-t border-gray-50 hover:bg-gray-50/50"><td className="px-5 py-3 font-medium text-gray-800">{inv.number}</td><td className="px-5 py-3 text-gray-700">{inv.customerName}</td><td className="px-5 py-3 font-semibold text-gray-800">{fmtCur(total)}</td><td className="px-5 py-3"><span className={"px-2.5 py-1 rounded-full text-xs font-semibold " + (statusColors[inv.status] || 'bg-gray-100 text-gray-600')}>{inv.status}</span></td><td className="px-5 py-3"><div className="flex items-center gap-2"><button onClick={() => setModalContent(<InvoicePreview invoice={inv} />)} className="text-brand-500 hover:text-brand-600" title="PDF"><i className="fa-solid fa-file-pdf"></i></button>{inv.status === 'unpaid' && <button onClick={() => markPaid(inv.id)} className="text-green-500 hover:text-green-600"><i className="fa-solid fa-check-circle"></i></button>}<button onClick={() => deleteInv(inv.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></td></tr>); })}</tbody></table></div></div>); }
 
 function InvoicePreview({ invoice }) {
   const { setModalContent, toast } = useApp();
