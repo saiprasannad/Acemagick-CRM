@@ -1619,7 +1619,6 @@ function MoveEmployeeModal({ user, fromDeptId, toDeptId, onClose }) {
     </div>
   );
 }
-
 function EmpProfileModal({ user, onClose }) {
   const { orgDepartments, roles, setUsers, toast } = useApp();
   const [selectedRoleId, setSelectedRoleId] = useState(user.role_id || '');
@@ -1698,6 +1697,8 @@ function EmpProfileModal({ user, onClose }) {
     </div>
   );
 }
+
+
 // --- END COMPANY STRUCTURE ---
 
 // --- ROLES & PERMISSIONS MANAGEMENT ---
