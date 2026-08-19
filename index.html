@@ -46,7 +46,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#10b981;box-sh
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo, useRef, useContext, createContext } = React;
 
-const VIEW_TITLES = { dashboard: 'Dashboard', leads: 'Leads Pipeline', pipelines: 'Pipelines & Tunnels', whatsapp: 'WhatsApp', calls: 'Voice Calls', email: 'Email', quotations: 'Quotations', invoices: 'Invoices', team: 'Team Management', org: 'Company Structure' };
+const VIEW_TITLES = { dashboard: 'Dashboard', leads: 'Leads Pipeline', pipelines: 'Pipelines & Tunnels', whatsapp: 'WhatsApp', calls: 'Voice Calls', email: 'Email', quotations: 'Quotations', invoices: 'Invoices', team: 'Team Management', org: 'Company Structure', roles: 'Roles & Permissions' };
 const ACT_ICONS = { whatsapp: 'fa-brands fa-whatsapp text-green-500', call: 'fa-solid fa-phone text-blue-500', note: 'fa-solid fa-sticky-note text-yellow-500', email: 'fa-solid fa-envelope text-purple-500', proposal: 'fa-solid fa-file-lines text-teal-500', stage: 'fa-solid fa-arrow-right text-indigo-500' };
 const ACT_COLORS = { whatsapp: 'bg-green-100 text-green-600', call: 'bg-blue-100 text-blue-600', note: 'bg-yellow-100 text-yellow-600', email: 'bg-purple-100 text-purple-600', proposal: 'bg-teal-100 text-teal-600', stage: 'bg-indigo-100 text-indigo-600' };
 
@@ -199,6 +199,7 @@ function AppProvider({ children }) {
   
   const [users, setUsers] = useState(() => getStore('users', []));
   const [invitations, setInvitations] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [orgDepartments, setOrgDepartments] = useState(() => getStore('orgDepartments', []));
   
   const [pipelines, setPipelines] = useState(() => getStore('pipelines', INITIAL_PIPELINES));
@@ -220,6 +221,10 @@ function AppProvider({ children }) {
       }
       const { data: dbInvites } = await supabase.from('invitations').select('*');
       if (dbInvites) setInvitations(dbInvites);
+      
+      // Fetch Roles
+      const { data: dbRoles } = await supabase.from('roles').select('*').order('name', { ascending: true });
+      if (dbRoles) setRoles(dbRoles);
     };
     loadCloudData();
   }, []);
@@ -275,7 +280,7 @@ function AppProvider({ children }) {
     }
   }, [tunnels, allStages, pipelines, toast, setLeads, currentUser]);
 
-  const val = useMemo(() => ({ loggedIn, setLoggedIn, currentUser, setCurrentUser, view, navigate, toasts, toast, modalContent, setModalContent, leads, setLeads, conversations, setConversations, calls, setCalls, quotations, setQuotations, invoices, setInvoices, users, setUsers, invitations, setInvitations, orgDepartments, setOrgDepartments, pipelines, setPipelines, tunnels, setTunnels, allStages, emailConfig, setEmailConfig, emailMessages, setEmailMessages, transitionLead, whatsappTarget, setWhatsappTarget }), [loggedIn, currentUser, view, toasts, modalContent, leads, conversations, calls, quotations, invoices, users, invitations, orgDepartments, toast, navigate, pipelines, tunnels, allStages, emailConfig, emailMessages, transitionLead, whatsappTarget, setWhatsappTarget]);
+  const val = useMemo(() => ({ loggedIn, setLoggedIn, currentUser, setCurrentUser, view, navigate, toasts, toast, modalContent, setModalContent, leads, setLeads, conversations, setConversations, calls, setCalls, quotations, setQuotations, invoices, setInvoices, users, setUsers, invitations, setInvitations, roles, setRoles, orgDepartments, setOrgDepartments, pipelines, setPipelines, tunnels, setTunnels, allStages, emailConfig, setEmailConfig, emailMessages, setEmailMessages, transitionLead, whatsappTarget, setWhatsappTarget }), [loggedIn, currentUser, view, toasts, modalContent, leads, conversations, calls, quotations, invoices, users, invitations, roles, orgDepartments, toast, navigate, pipelines, tunnels, allStages, emailConfig, emailMessages, transitionLead, whatsappTarget, setWhatsappTarget]);
 
   return <AppContext.Provider value={val}>{children}</AppContext.Provider>;
 }
@@ -362,6 +367,7 @@ function AcceptInviteModal({ prefilledToken = '' }) {
 
 function Sidebar() {
   const { view, navigate, setLoggedIn, emailMessages, currentUser } = useApp();
+  const isAdmin = currentUser?.role === 'Admin';
   const items = [
     { id: 'dashboard', icon: 'fa-solid fa-grid-2', label: 'Dashboard', g: 'Main' }, 
     { id: 'leads', icon: 'fa-solid fa-users', label: 'Leads', g: 'Main' }, 
@@ -369,12 +375,13 @@ function Sidebar() {
     { id: 'calls', icon: 'fa-solid fa-phone', label: 'Calls', g: 'Main' }, 
     { id: 'email', icon: 'fa-solid fa-envelope', label: 'Email', g: 'Main', ic: 'text-purple-400' }, 
     { id: 'quotations', icon: 'fa-solid fa-file-lines', label: 'Quotations', g: 'Finance' }, 
-    { id: 'invoices', icon: 'fa-solid fa-receipt', label: 'Invoices', g: 'Finance' }, 
-    { id: 'pipelines', icon: 'fa-solid fa-diagram-project', label: 'Pipelines', g: 'Settings' }
+    { id: 'invoices', icon: 'fa-solid fa-receipt', label: 'Invoices', g: 'Finance' }
   ];
-  if (currentUser?.role === 'Admin') {
+  if (isAdmin) {
+    items.push({ id: 'pipelines', icon: 'fa-solid fa-diagram-project', label: 'Pipelines', g: 'Settings' });
     items.push({ id: 'team', icon: 'fa-solid fa-user-group', label: 'Team', g: 'Settings' });
     items.push({ id: 'org', icon: 'fa-solid fa-sitemap', label: 'Company Structure', g: 'Settings' });
+    items.push({ id: 'roles', icon: 'fa-solid fa-shield-halved', label: 'Roles & Permissions', g: 'Settings' });
   }
   const grp = {}; items.forEach(n => { if (!grp[n.g]) grp[n.g] = []; grp[n.g].push(n); });
   const ur = emailMessages.filter(m => m.folder === 'inbox' && !m.read).length;
@@ -438,9 +445,9 @@ function Dashboard() {
   );
 }
 
-// --- ENHANCED LEADS VIEW WITH ALL DEALS, FILTERS, IMPORT/EXPORT ---
 function LeadsView() {
   const { setModalContent, pipelines, leads, currentUser } = useApp();
+  const isAdmin = currentUser?.role === 'Admin';
   const [subView, setSubView] = useState('kanban');
   const [activePipelineId, setActivePipelineId] = useState(pipelines[0]?.id || 'all');
   const [searchText, setSearchText] = useState('');
@@ -450,15 +457,11 @@ function LeadsView() {
 
   const filteredLeads = useMemo(() => {
     let res = leads;
-    if (currentUser?.role !== 'Admin') res = res.filter(l => l.assignedTo === currentUser?.id);
+    if (!isAdmin) res = res.filter(l => l.assignedTo === currentUser?.id);
     
     if (searchText.trim()) {
       const q = searchText.toLowerCase();
-      res = res.filter(l => 
-        l.name?.toLowerCase().includes(q) || 
-        l.email?.toLowerCase().includes(q) || 
-        l.phone?.replace(/\D/g, '').includes(q.replace(/\D/g, ''))
-      );
+      res = res.filter(l => l.name?.toLowerCase().includes(q) || l.email?.toLowerCase().includes(q) || l.phone?.replace(/\D/g, '').includes(q.replace(/\D/g, '')));
     }
     
     if (activePipelineId !== 'all') {
@@ -488,7 +491,7 @@ function LeadsView() {
     }
     
     return res;
-  }, [leads, searchText, activePipelineId, dateFilter, customDateFrom, customDateTo, currentUser, pipelines]);
+  }, [leads, searchText, activePipelineId, dateFilter, customDateFrom, customDateTo, currentUser, pipelines, isAdmin]);
 
   const clearFilters = () => {
     setSearchText(''); setDateFilter('all'); setCustomDateFrom(''); setCustomDateTo('');
@@ -514,7 +517,7 @@ function LeadsView() {
           )}
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setModalContent(<ImportModal />)} className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2"><i className="fa-solid fa-file-import"></i>Import</button>
+          {isAdmin && <button onClick={() => setModalContent(<ImportModal />)} className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2"><i className="fa-solid fa-file-import"></i>Import</button>}
           <button onClick={() => setModalContent(<ExportModal leads={filteredLeads} />)} className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2"><i className="fa-solid fa-file-export"></i>Export</button>
           <button onClick={() => setModalContent(<CreateLeadModal defaultPipelineId={activePipelineId === 'all' ? (pipelines[0]?.id || '') : activePipelineId} />)} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><i className="fa-solid fa-plus"></i>Add Lead</button>
         </div>
@@ -592,6 +595,7 @@ function KanbanView({ activePipelineId, leads }) {
 
 function ListView({ leads }) { 
   const { setLeads, toast, setModalContent, currentUser, setWhatsappTarget, navigate } = useApp(); 
+  const isAdmin = currentUser?.role === 'Admin';
   const deleteLead = (id, e) => { e.stopPropagation(); setLeads(prev => prev.filter(l => l.id !== id)); toast('Deleted', 'info'); }; 
   const handleWhatsAppClick = (e, lead) => {
     e.stopPropagation();
@@ -620,7 +624,13 @@ function ListView({ leads }) {
               </td>
               <td className="px-5 py-3"><StageBadge stageId={l.stage} /></td>
               <td className="px-5 py-3 text-gray-600">{l.budget || '—'}</td>
-              <td className="px-5 py-3"><button onClick={e => deleteLead(l.id, e)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></td>
+              <td className="px-5 py-3">
+                {isAdmin ? (
+                  <button onClick={e => deleteLead(l.id, e)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button>
+                ) : (
+                  <span className="text-gray-200 text-xs">—</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -1155,9 +1165,12 @@ function LeadDetail({ leadId }) {
 }
 
 function PipelinesView() {
-  const { pipelines, setPipelines, tunnels, setTunnels, toast } = useApp();
+  const { pipelines, setPipelines, tunnels, setTunnels, toast, currentUser } = useApp();
+  const isAdmin = currentUser?.role === 'Admin';
   const [editMode, setEditMode] = useState(false);
   const [showTunnelForm, setShowTunnelForm] = useState(null);
+  const canEdit = isAdmin && editMode;
+  
   const updatePipelineName = (pId, name) => setPipelines(prev => prev.map(p => p.id === pId ? { ...p, name } : p));
   const updateStage = (pId, sId, data) => setPipelines(prev => prev.map(p => p.id === pId ? { ...p, stages: p.stages.map(s => s.id === sId ? { ...s, ...data } : s) } : p));
   const addPipeline = () => setPipelines(prev => [...prev, { id: genId(), name: 'New Pipeline', stages: [{ id: genId(), label: 'Stage 1', color: '#818CF8', bg: '#EEF2FF' }] }]);
@@ -1170,32 +1183,35 @@ function PipelinesView() {
   return (
     <div className="fade-in">
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3"><button onClick={() => setEditMode(!editMode)} className={`px-4 py-2 rounded-lg text-sm font-medium ${editMode ? 'bg-brand-500 text-white' : 'bg-white border border-gray-200 text-gray-600'}`}><i className="fa-solid fa-pen mr-1.5"></i>{editMode ? 'Done Editing' : 'Edit Pipelines'}</button></div>
-        {editMode && <button onClick={addPipeline} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Add Pipeline</button>}
+        <div className="flex items-center gap-3">
+          {isAdmin && <button onClick={() => setEditMode(!editMode)} className={`px-4 py-2 rounded-lg text-sm font-medium ${editMode ? 'bg-brand-500 text-white' : 'bg-white border border-gray-200 text-gray-600'}`}><i className="fa-solid fa-pen mr-1.5"></i>{editMode ? 'Done Editing' : 'Edit Pipelines'}</button>}
+          {!isAdmin && <span className="text-sm text-gray-500 italic">Read-only view</span>}
+        </div>
+        {canEdit && <button onClick={addPipeline} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Add Pipeline</button>}
       </div>
       <div className="flex gap-6 overflow-x-auto pb-8 relative">
         {pipelines.map(p => (
           <div key={p.id} className="pipeline-col bg-gray-50 rounded-2xl p-4 border border-gray-100 shrink-0 relative">
             <div className="mb-4 pb-3 border-b border-gray-200 flex items-center justify-between">
-              {editMode ? <input value={p.name} onChange={e => updatePipelineName(p.id, e.target.value)} className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold w-full" /> : <h3 className="font-bold text-gray-800 text-sm">{p.name}</h3>}
-              {editMode && <button onClick={() => deletePipeline(p.id)} className="text-gray-400 hover:text-red-500 ml-2"><i className="fa-solid fa-trash-can text-xs"></i></button>}
+              {canEdit ? <input value={p.name} onChange={e => updatePipelineName(p.id, e.target.value)} className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm font-bold w-full" /> : <h3 className="font-bold text-gray-800 text-sm">{p.name}</h3>}
+              {canEdit && <button onClick={() => deletePipeline(p.id)} className="text-gray-400 hover:text-red-500 ml-2"><i className="fa-solid fa-trash-can text-xs"></i></button>}
             </div>
             <div className="space-y-2">
               {p.stages.map(s => (
                 <div key={s.id} className="relative">
                   <div className="p-3 rounded-lg text-white font-medium text-sm flex items-center justify-between" style={{ background: s.color }}>
-                    {editMode ? (<div className="flex items-center gap-2 w-full"><input type="color" value={s.color} onChange={e => updateStage(p.id, s.id, { color: e.target.value, bg: e.target.value + '20' })} className="w-6 h-6 rounded cursor-pointer bg-transparent border-none p-0" /><input value={s.label} onChange={e => updateStage(p.id, s.id, { label: e.target.value })} className="bg-white/20 px-2 py-1 rounded text-white w-full text-xs" /><button onClick={() => deleteStage(p.id, s.id)} className="text-white/80 hover:text-white"><i className="fa-solid fa-times"></i></button></div>) : (<span className="text-xs">{s.label} {s.type && <span className="ml-1 text-[9px] uppercase opacity-80">({s.type})</span>}</span>)}
+                    {canEdit ? (<div className="flex items-center gap-2 w-full"><input type="color" value={s.color} onChange={e => updateStage(p.id, s.id, { color: e.target.value, bg: e.target.value + '20' })} className="w-6 h-6 rounded cursor-pointer bg-transparent border-none p-0" /><input value={s.label} onChange={e => updateStage(p.id, s.id, { label: e.target.value })} className="bg-white/20 px-2 py-1 rounded text-white w-full text-xs" /><button onClick={() => deleteStage(p.id, s.id)} className="text-white/80 hover:text-white"><i className="fa-solid fa-times"></i></button></div>) : (<span className="text-xs">{s.label} {s.type && <span className="ml-1 text-[9px] uppercase opacity-80">({s.type})</span>}</span>)}
                   </div>
                   {tunnels.filter(t => t.fromStageId === s.id).map(t => {
                     const targetP = pipelines.find(pp => pp.id === t.toPipelineId);
                     const targetS = targetP?.stages.find(ss => ss.id === t.toStageId);
-                    return (<div key={t.id} className="mt-1 ml-2 pl-2 border-l-2 border-brand-500 text-[10px] text-gray-500 flex items-center gap-1"><i className="fa-solid fa-arrow-right text-brand-500"></i><span className="font-medium text-brand-600">{t.action}</span> to {targetP?.name || 'Unknown'} &rarr; {targetS?.label || 'Unknown'}{editMode && <button onClick={() => deleteTunnel(t.id)} className="text-red-400 hover:text-red-600 ml-1"><i className="fa-solid fa-times"></i></button>}</div>);
+                    return (<div key={t.id} className="mt-1 ml-2 pl-2 border-l-2 border-brand-500 text-[10px] text-gray-500 flex items-center gap-1"><i className="fa-solid fa-arrow-right text-brand-500"></i><span className="font-medium text-brand-600">{t.action}</span> to {targetP?.name || 'Unknown'} &rarr; {targetS?.label || 'Unknown'}{canEdit && <button onClick={() => deleteTunnel(t.id)} className="text-red-400 hover:text-red-600 ml-1"><i className="fa-solid fa-times"></i></button>}</div>);
                   })}
-                  {editMode && <button onClick={() => setShowTunnelForm({ fromStageId: s.id, fromPipelineId: p.id })} className="mt-1 ml-2 text-[10px] text-gray-400 hover:text-brand-500 flex items-center gap-1"><i className="fa-solid fa-plus"></i>Add Tunnel</button>}
+                  {canEdit && <button onClick={() => setShowTunnelForm({ fromStageId: s.id, fromPipelineId: p.id })} className="mt-1 ml-2 text-[10px] text-gray-400 hover:text-brand-500 flex items-center gap-1"><i className="fa-solid fa-plus"></i>Add Tunnel</button>}
                 </div>
               ))}
             </div>
-            {editMode && <button onClick={() => addStage(p.id)} className="mt-4 w-full text-xs text-gray-400 hover:text-brand-500 border-2 border-dashed border-gray-200 rounded-lg py-2">+ Add Stage</button>}
+            {canEdit && <button onClick={() => addStage(p.id)} className="mt-4 w-full text-xs text-gray-400 hover:text-brand-500 border-2 border-dashed border-gray-200 rounded-lg py-2">+ Add Stage</button>}
           </div>
         ))}
       </div>
@@ -1240,7 +1256,6 @@ function CompanyStructureView() {
 
   const childDepts = orgDepartments.filter(d => d.parentId === activeDept.id);
 
-  // Breadcrumbs logic
   const getBreadcrumbs = (dept) => {
     let crumbs = [];
     let current = dept;
@@ -1268,10 +1283,8 @@ function CompanyStructureView() {
 
   return (
     <div className="fade-in flex h-full">
-      {/* Tree Structure Area */}
       <div className="flex-1 overflow-auto p-8 flex flex-col min-w-0">
         
-        {/* Breadcrumbs */}
         <div className="flex items-center gap-2 mb-6 text-sm">
           {breadcrumbs.map((c, i) => (
             <React.Fragment key={c.id}>
@@ -1281,7 +1294,6 @@ function CompanyStructureView() {
           ))}
         </div>
 
-        {/* Active Department Card (Large) */}
         <div className="mb-8 w-full max-w-md">
           <div className="p-5 rounded-xl border-2 border-brand-500 bg-brand-50 shadow-sm flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center text-brand-600">
@@ -1294,7 +1306,6 @@ function CompanyStructureView() {
           </div>
         </div>
 
-        {/* Grid of Children */}
         {childDepts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {childDepts.map(child => {
@@ -1342,7 +1353,6 @@ function CompanyStructureView() {
         )}
       </div>
 
-      {/* Right Side Detail Panel */}
       <div className="w-96 border-l border-gray-100 bg-white p-6 overflow-y-auto shrink-0">
         {selectedDept ? <DeptDetailPanel dept={selectedDept} /> : <div className="text-center text-gray-400 mt-20">Select a department</div>}
       </div>
@@ -1395,12 +1405,10 @@ function DeptDetailPanel({ dept }) {
         </div>
       </div>
 
-      {/* Action Buttons */}
       <div className="flex gap-3 mb-6">
         <button onClick={() => setModalContent(<AddEmpModal dept={dept} onClose={() => setModalContent(null)} />)} className="flex-1 bg-brand-50 text-brand-600 hover:bg-brand-100 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
           <i className="fa-solid fa-user-plus"></i> Add employees
         </button>
-        {/* NEW: Add Sub-department Button */}
         <button onClick={() => setModalContent(<DeptModal parentId={dept.id} onClose={() => setModalContent(null)} />)} className="flex-1 bg-purple-50 text-purple-600 hover:bg-purple-100 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
           <i className="fa-solid fa-sitemap"></i> Add Sub-dept
         </button>
@@ -1650,6 +1658,172 @@ function EmpProfileModal({ user, onClose }) {
 }
 // --- END COMPANY STRUCTURE ---
 
+// --- ROLES & PERMISSIONS MANAGEMENT ---
+function RolesPermissionsView() {
+  const { roles, setRoles, toast, setModalContent } = useApp();
+
+  const deleteRole = async (id) => {
+    if (id === '00000000-0000-0000-0000-000000000000') return toast('Cannot delete system Super Admin role', 'error');
+    const { error } = await supabase.from('roles').delete().eq('id', id);
+    if (error) return toast('Error deleting role', 'error');
+    setRoles(prev => prev.filter(r => r.id !== id));
+    toast('Role deleted');
+  };
+
+  return (
+    <div className="fade-in">
+      <div className="flex items-center justify-between mb-5">
+        <div className="text-sm text-gray-500">{roles.length} role(s) configured</div>
+        <button onClick={() => setModalContent(<RoleConfigModal onClose={() => setModalContent(null)} />)} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
+          <i className="fa-solid fa-plus mr-1.5"></i>Create Role
+        </button>
+      </div>
+      
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase">
+              <th className="px-5 py-3">Role Name</th>
+              <th className="px-5 py-3">Description</th>
+              <th className="px-5 py-3">Data Scope</th>
+              <th className="px-5 py-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map(r => (
+              <tr key={r.id} className="border-t border-gray-50 hover:bg-gray-50/50">
+                <td className="px-5 py-3 font-medium text-gray-800 flex items-center gap-2">
+                  {r.is_system && <i className="fa-solid fa-lock text-xs text-gray-400"></i>}
+                  {r.name}
+                </td>
+                <td className="px-5 py-3 text-gray-600">{r.description || '—'}</td>
+                <td className="px-5 py-3"><span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 capitalize">{r.record_scope.replace('_', ' ')}</span></td>
+                <td className="px-5 py-3">
+                  <div className="flex gap-2">
+                    <button onClick={() => setModalContent(<RoleConfigModal role={r} onClose={() => setModalContent(null)} />)} className="text-blue-500 hover:text-blue-600" title="Edit"><i className="fa-solid fa-pen-to-square text-xs"></i></button>
+                    <button onClick={() => setModalContent(<RoleConfigModal role={r} duplicate={true} onClose={() => setModalContent(null)} />)} className="text-gray-400 hover:text-gray-600" title="Duplicate"><i className="fa-solid fa-copy text-xs"></i></button>
+                    {!r.is_system && <button onClick={() => deleteRole(r.id)} className="text-gray-300 hover:text-red-500" title="Delete"><i className="fa-solid fa-trash-can text-xs"></i></button>}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RoleConfigModal({ role, duplicate, onClose }) {
+  const { setRoles, toast } = useApp();
+  
+  const defaultPerms = {
+    leads: { view: false, create: false, edit: false, delete: false, import: false, export: false },
+    whatsapp: { view: false, send: false },
+    company_structure: { view: false, manage_employees: false, manage_departments: false },
+    roles_permissions: { view: false, manage: false }
+  };
+
+  const [name, setName] = useState(duplicate ? '' : role?.name || '');
+  const [description, setDescription] = useState(duplicate ? '' : role?.description || '');
+  const [scope, setScope] = useState(role?.record_scope || 'own');
+  const [perms, setPerms] = useState(role?.permissions ? JSON.parse(JSON.stringify(role.permissions)) : defaultPerms);
+
+  const togglePerm = (module, action) => {
+    setPerms(prev => ({
+      ...prev,
+      [module]: {
+        ...prev[module],
+        [action]: !prev[module][action]
+      }
+    }));
+  };
+
+  const save = async () => {
+    if (!name.trim()) return toast('Role name required', 'error');
+    
+    const payload = { name, description, record_scope: scope, permissions: perms, is_system: false };
+    
+    if (role && !duplicate) {
+      const { data, error } = await supabase.from('roles').update(payload).eq('id', role.id).select().single();
+      if (error) return toast('Error updating role', 'error');
+      setRoles(prev => prev.map(r => r.id === role.id ? data : r));
+      toast('Role updated');
+    } else {
+      const { data, error } = await supabase.from('roles').insert(payload).select().single();
+      if (error) return toast('Error creating role', 'error');
+      setRoles(prev => [...prev, data]);
+      toast('Role created');
+    }
+    onClose();
+  };
+
+  const RenderPerm = ({ module, label, actions }) => (
+    <div className="mb-6">
+      <h4 className="text-sm font-bold text-gray-800 mb-2">{label}</h4>
+      <div className="flex flex-wrap gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+        {actions.map(a => (
+          <label key={a.key} className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={perms[module]?.[a.key] || false} onChange={() => togglePerm(module, a.key)} className="w-4 h-4 rounded text-brand-500 focus:ring-brand-500" />
+            <span className="text-sm text-gray-700 capitalize">{a.label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="p-6 max-w-3xl">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-800">{role && !duplicate ? 'Edit Role' : 'Create Role'}</h2>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div>
+          <label className="text-xs font-medium text-gray-500 mb-1 block">Role Name *</label>
+          <input value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="e.g. Sales Agent" />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-500 mb-1 block">Record Data Scope</label>
+          <select value={scope} onChange={e => setScope(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white">
+            <option value="own">Own Records Only</option>
+            <option value="department">Department Records</option>
+            <option value="department_and_sub">Department + Sub-departments</option>
+            <option value="all">All Accessible Records</option>
+          </select>
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs font-medium text-gray-500 mb-1 block">Description</label>
+          <input value={description} onChange={e => setDescription(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Short description of this role" />
+        </div>
+      </div>
+
+      <div className="border-t border-gray-100 pt-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Module Permissions</h3>
+        <RenderPerm module="leads" label="Leads" actions={[
+          { key: 'view', label: 'View' }, { key: 'create', label: 'Create' }, { key: 'edit', label: 'Edit' }, { key: 'delete', label: 'Delete' }, { key: 'import', label: 'Import' }, { key: 'export', label: 'Export' }
+        ]} />
+        <RenderPerm module="whatsapp" label="WhatsApp" actions={[
+          { key: 'view', label: 'View Conversations' }, { key: 'send', label: 'Send Messages' }
+        ]} />
+        <RenderPerm module="company_structure" label="Company Structure" actions={[
+          { key: 'view', label: 'View' }, { key: 'manage_employees', label: 'Manage Employees' }, { key: 'manage_departments', label: 'Manage Departments' }
+        ]} />
+        <RenderPerm module="roles_permissions" label="Roles & Permissions" actions={[
+          { key: 'view', label: 'View' }, { key: 'manage', label: 'Manage' }
+        ]} />
+      </div>
+
+      <div className="flex gap-3 mt-8">
+        <button onClick={onClose} className="flex-1 bg-gray-100 text-gray-600 py-3 rounded-xl font-medium text-sm hover:bg-gray-200">Cancel</button>
+        <button onClick={save} className="flex-1 bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600">Save Role</button>
+      </div>
+    </div>
+  );
+}
+// --- END ROLES & PERMISSIONS ---
+
 function WhatsAppView() {
   const { toast, leads, setLeads, currentUser, whatsappTarget, setWhatsappTarget } = useApp();
   const [config, setConfig] = useState(() => getStore('whatsappConfig', { instanceId: '', token: '' }));
@@ -1794,7 +1968,7 @@ function VoiceCallsView() { const { calls, setCalls, leads, toast } = useApp(); 
 
 function EmailView() { const { emailConfig, setEmailConfig, emailMessages, setEmailMessages, leads, setLeads, toast } = useApp(); const [tab, setTab] = useState('inbox'); const [selectedId, setSelectedId] = useState(null); const [compose, setCompose] = useState(null); const [showSettings, setShowSettings] = useState(false); const [sending, setSending] = useState(false); const [testing, setTesting] = useState(false); const selectedEmail = emailMessages.find(m => m.id === selectedId); const inboxMsgs = emailMessages.filter(m => m.folder === 'inbox').sort((a, b) => b.date - a.date); const sentMsgs = emailMessages.filter(m => m.folder === 'sent').sort((a, b) => b.date - a.date); const currentMsgs = tab === 'inbox' ? inboxMsgs : sentMsgs; const unreadCount = inboxMsgs.filter(m => !m.read).length; const selectEmail = (id) => { setSelectedId(id); setEmailMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m)) }; const openCompose = (prefill) => { setCompose({ to: prefill && prefill.to ? prefill.to : '', cc: '', subject: prefill && prefill.subject ? prefill.subject : '', body: prefill && prefill.body ? prefill.body : (emailConfig.signature || ''), leadId: prefill && prefill.leadId ? prefill.leadId : null }) }; const sendEmail = async () => { if (!compose.to.trim()) { toast('Recipient required', 'error'); return; } if (!compose.subject.trim()) { toast('Subject required', 'error'); return; } if (!emailConfig.connected) { toast('Connect email in Settings first', 'error'); return; } setSending(true); try { await emailjs.send(emailConfig.serviceId, emailConfig.templateId, { to_email: compose.to, from_name: emailConfig.fromName, from_email: emailConfig.fromEmail, subject: compose.subject, message: compose.body }, emailConfig.publicKey); const newMsg = { id: genId(), folder: 'sent', from: emailConfig.fromEmail, fromName: emailConfig.fromName, to: compose.to, subject: compose.subject, body: compose.body, date: Date.now(), read: true, leadId: compose.leadId || null }; setEmailMessages(prev => [...prev, newMsg]); if (compose.leadId) { setLeads(prev => prev.map(l => l.id === compose.leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'email', text: 'Email: ' + compose.subject.slice(0, 50), at: Date.now() }] } : l)); } toast('Email sent!'); setCompose(null); } catch (err) { console.error('EmailJS:', err); toast('Send failed. Check settings.', 'error'); } setSending(false); }; const testConnection = async () => { if (!emailConfig.serviceId.trim() || !emailConfig.templateId.trim() || !emailConfig.publicKey.trim()) { toast('All 3 EmailJS fields required', 'error'); return; } setTesting(true); try { await emailjs.send(emailConfig.serviceId, emailConfig.templateId, { to_email: emailConfig.fromEmail, from_name: 'NexaCRM', from_email: emailConfig.fromEmail, subject: 'Test from NexaCRM', message: 'Connection test successful!' }, emailConfig.publicKey); setEmailConfig(prev => ({ ...prev, connected: true })); toast('Connected! Check inbox for test.'); } catch (err) { setEmailConfig(prev => ({ ...prev, connected: false })); toast('Failed: ' + (err && err.text ? err.text : 'Check credentials'), 'error'); } setTesting(false); }; const deleteEmail = (id) => { setEmailMessages(prev => prev.filter(m => m.id !== id)); if (selectedId === id) setSelectedId(null); toast('Deleted', 'info'); }; const ec = emailConfig; const setEC = (k, v) => setEmailConfig(prev => ({ ...prev, [k]: v })); return (<div className="fade-in flex h-[calc(100vh-3.5rem)] -m-6"><div className="w-56 shrink-0 bg-white border-r border-gray-100 flex flex-col p-4 gap-3"><button onClick={() => openCompose({})} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 w-full"><i className="fa-solid fa-pen-to-square"></i>Compose</button><div className="space-y-1 mt-2"><button onClick={() => { setTab('inbox'); setSelectedId(null); }} className={"w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all " + (tab === 'inbox' ? 'bg-brand-50 text-brand-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><i className="fa-solid fa-inbox w-4"></i>Inbox{unreadCount > 0 && <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{unreadCount}</span>}</button><button onClick={() => { setTab('sent'); setSelectedId(null); }} className={"w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all " + (tab === 'sent' ? 'bg-brand-50 text-brand-600 font-medium' : 'text-gray-600 hover:bg-gray-50')}><i className="fa-solid fa-paper-plane w-4"></i>Sent</button></div><div className="flex-1"></div><div className="border-t border-gray-100 pt-3"><button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50"><i className="fa-solid fa-gear w-4"></i>Settings</button><div className="mt-3 px-3 flex items-center gap-2"><div className={"w-2 h-2 rounded-full " + (ec.connected ? 'bg-green-500' : 'bg-gray-300')}></div><span className="text-[11px] text-gray-400">{ec.connected ? 'Connected' : 'Not connected'}</span></div></div></div><div className="w-96 shrink-0 border-r border-gray-100 bg-white flex flex-col overflow-hidden"><div className="px-4 py-3 border-b border-gray-100"><h3 className="text-sm font-semibold text-gray-800">{tab === 'inbox' ? 'Inbox' : 'Sent'} ({currentMsgs.length})</h3></div><div className="flex-1 overflow-y-auto">{currentMsgs.length === 0 && <div className="p-10 text-center text-gray-400 text-sm">No emails</div>}{currentMsgs.map(m => (<div key={m.id} onClick={() => selectEmail(m.id)} className={"email-row px-4 py-3 border-b border-gray-50 cursor-pointer transition-all " + (selectedId === m.id ? 'sel' : '') + (m.read ? '' : ' bg-brand-50/30')}><div className="flex items-center justify-between mb-1"><span className={"text-sm truncate " + (m.read ? 'text-gray-700' : 'text-gray-900 font-semibold')}>{tab === 'inbox' ? m.fromName : m.to}</span><span className="text-[10px] text-gray-400 shrink-0 ml-2">{fmtDate(m.date)}</span></div><div className={"text-xs truncate " + (m.read ? 'text-gray-500' : 'text-gray-700 font-medium')}>{m.subject}</div></div>))}</div></div><div className="flex-1 flex flex-col bg-white overflow-hidden">{compose ? (<div className="flex-1 flex flex-col"><div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h3 className="text-sm font-semibold text-gray-800">New Message</h3><button onClick={() => setCompose(null)} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark"></i></button></div><div className="p-6 space-y-4 flex-1 overflow-y-auto"><div className="flex items-center gap-3"><label className="text-xs font-medium text-gray-500 w-10 shrink-0">To</label><input value={compose.to} onChange={e => setCompose(p => ({ ...p, to: e.target.value }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="recipient@email.com" /><select onChange={e => { const l = leads.find(x => x.id === e.target.value); if (l && l.email) setCompose(p => ({ ...p, to: l.email, leadId: l.id })); }} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white shrink-0" value=""><option value="">Leads</option>{leads.filter(l => l.email).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div className="flex items-center gap-3"><label className="text-xs font-medium text-gray-500 w-10 shrink-0">Subject</label><input value={compose.subject} onChange={e => setCompose(p => ({ ...p, subject: e.target.value }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><textarea value={compose.body} onChange={e => setCompose(p => ({ ...p, body: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none min-h-[280px]" placeholder="Write your email..." /></div><div className="px-6 py-4 border-t border-gray-100 flex items-center gap-3"><button onClick={sendEmail} disabled={sending} className="bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300 text-white px-6 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2"><i className={"fa-solid " + (sending ? 'fa-spinner fa-spin' : 'fa-paper-plane')}></i>{sending ? 'Sending...' : 'Send'}</button><button onClick={() => setCompose(null)} className="text-gray-500 px-4 py-2.5 rounded-lg text-sm">Discard</button></div></div>) : selectedEmail ? (<div className="flex-1 overflow-y-auto"><div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><div className="flex items-center gap-2"><button onClick={() => setSelectedId(null)} className="text-gray-400 hover:text-gray-600 mr-2"><i className="fa-solid fa-arrow-left"></i></button><h3 className="text-sm font-semibold text-gray-800 truncate">{selectedEmail.subject}</h3></div><div className="flex items-center gap-3">{tab === 'inbox' && <button onClick={() => openCompose({ to: selectedEmail.from, subject: 'Re: ' + selectedEmail.subject })} className="text-brand-500 hover:text-brand-600 text-sm font-medium"><i className="fa-solid fa-reply mr-1"></i>Reply</button>}<button onClick={() => deleteEmail(selectedEmail.id)} className="text-gray-400 hover:text-red-500"><i className="fa-solid fa-trash-can text-sm"></i></button></div></div><div className="p-6"><div className="flex items-center gap-4 mb-6"><div className="w-11 h-11 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold text-purple-600">{(selectedEmail.folder === 'inbox' ? selectedEmail.fromName : 'You').split(' ').map(n => n[0]).join('').slice(0, 2)}</div><div className="flex-1 min-w-0"><div className="text-sm font-semibold text-gray-800">{selectedEmail.folder === 'inbox' ? selectedEmail.fromName : 'You'}</div><div className="text-xs text-gray-400">{selectedEmail.folder === 'inbox' ? 'From: ' + selectedEmail.from : 'To: ' + selectedEmail.to}</div></div><div className="text-xs text-gray-400">{fmtDate(selectedEmail.date)}</div></div><div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{selectedEmail.body}</div></div></div>) : <div className="flex-1 flex items-center justify-center text-gray-400"><div className="text-center"><i className="fa-solid fa-envelope-open text-5xl mb-3 text-gray-200"></i><p className="text-sm">Select an email</p></div></div>}</div>{showSettings && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setShowSettings(false)}><div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 fade-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}><div className="flex items-center justify-between mb-6"><h2 className="text-lg font-bold text-gray-800"><i className="fa-solid fa-gear mr-2 text-gray-400"></i>Email Settings</h2><button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button></div>{ec.connected ? (<div className="text-center py-8"><div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4"><i className="fa-solid fa-check text-green-600 text-2xl"></i></div><h3 className="text-lg font-semibold text-gray-800 mb-1">Connected</h3><p className="text-sm text-gray-500 mb-1">{ec.fromEmail}</p><p className="text-xs text-gray-400 mb-6">Service: {ec.serviceId}</p><button onClick={() => { setEC('connected', false); toast('Disconnected', 'info'); }} className="bg-red-50 text-red-600 hover:bg-red-100 px-6 py-2.5 rounded-xl text-sm font-medium">Disconnect</button></div>) : (<div className="space-y-4"><div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700"><i className="fa-solid fa-circle-info mr-2"></i><strong>Setup:</strong><ol className="mt-2 ml-4 list-decimal space-y-1 text-xs"><li>Go to <a href="https://www.emailjs.com" target="_blank" className="underline font-medium">emailjs.com</a> — sign up free</li><li>Add Gmail as Email Service — copy <b>Service ID</b></li><li>Create Template with variables: <code>{'{{to_email}}'}</code> <code>{'{{subject}}'}</code> <code>{'{{message}}'}</code> <code>{'{{from_name}}'}</code> <code>{'{{invite_link}}'}</code> — copy <b>Template ID</b></li><li>Account &rarr; copy <b>Public Key</b></li><li>Paste below &rarr; Test Connection</li></ol></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Service ID *</label><input value={ec.serviceId} onChange={e => setEC('serviceId', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="service_xxxxxxx" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Template ID *</label><input value={ec.templateId} onChange={e => setEC('templateId', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="template_xxxxxxx" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Public Key *</label><input value={ec.publicKey} onChange={e => setEC('publicKey', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="xxxxxxxxxxxxxxx" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Your Name</label><input value={ec.fromName} onChange={e => setEC('fromName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Your Email</label><input value={ec.fromEmail} onChange={e => setEC('fromEmail', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Signature</label><textarea value={ec.signature} onChange={e => setEC('signature', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm resize-none h-20" /></div><button onClick={testConnection} disabled={testing} className="w-full bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600 disabled:bg-brand-300 flex items-center justify-center gap-2"><i className={"fa-solid " + (testing ? 'fa-spinner fa-spin' : 'fa-plug')}></i>{testing ? 'Testing...' : 'Test Connection & Connect'}</button></div>)}</div></div>}</div>); }
 
-function QuotationsView() { const { quotations, setQuotations, leads, toast, setModalContent } = useApp(); const [form, setForm] = useState(null); const startCreate = () => { setForm({ number: 'Q-' + String(quotations.length + 1).padStart(3, '0'), leadId: '', customerName: '', customerEmail: '', items: [{ desc: '', qty: 1, rate: 0 }], tax: 18, status: 'draft', validUntil: Date.now() + 864e5 * 30 }) }; const saveQuotation = () => { if (!form.customerName.trim()) { toast('Customer required', 'error'); return; } if (form.id) { setQuotations(prev => prev.map(q => q.id === form.id ? { ...form, updatedAt: Date.now() } : q)); toast('Updated'); } else { setQuotations(prev => [...prev, { ...form, id: genId(), createdAt: Date.now() }]); toast('Created'); } setForm(null); }; const updateStatus = (id, status) => { setQuotations(prev => prev.map(q => q.id === id ? { ...q, status } : q)); toast('Status updated'); }; const deleteQ = (id) => { setQuotations(prev => prev.filter(q => q.id !== id)); toast('Deleted', 'info'); }; const addItem = () => setForm(prev => ({ ...prev, items: [...prev.items, { desc: '', qty: 1, rate: 0 }] })); const removeItem = (idx) => setForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) })); const setItem = (idx, key, val) => setForm(prev => ({ ...prev, items: prev.items.map((it, i) => i === idx ? { ...it, [key]: val } : it) })); const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v })); const linkLead = (leadId) => { const lead = leads.find(l => l.id === leadId); if (lead) setForm(prev => ({ ...prev, leadId, customerName: lead.name, customerEmail: lead.email || '' })); }; const statusColors = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-amber-100 text-amber-700', accepted: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600' }; if (form) return (<div className="fade-in bg-white rounded-2xl p-6 border border-gray-100 shadow-sm max-w-3xl"><h3 className="text-lg font-bold text-gray-800 mb-5">{form.id ? 'Edit' : 'Create'} Quotation</h3><div className="grid grid-cols-2 gap-4 mb-5"><div><label className="text-xs font-medium text-gray-500 mb-1 block">Number</label><input value={form.number} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50" readOnly /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Lead</label><select value={form.leadId} onChange={e => linkLead(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white"><option value="">-- Select --</option>{leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Customer *</label><input value={form.customerName} onChange={e => setField('customerName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Email</label><input value={form.customerEmail} onChange={e => setField('customerEmail', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Valid Until</label><input type="date" value={form.validUntil ? new Date(form.validUntil).toISOString().split('T')[0] : ''} onChange={e => setField('validUntil', new Date(e.target.value).getTime())} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Tax %</label><input type="number" value={form.tax} onChange={e => setField('tax', Number(e.target.value))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div></div><div className="mb-5"><div className="flex items-center justify-between mb-2"><label className="text-xs font-semibold text-gray-500 uppercase">Items</label><button onClick={addItem} className="text-xs text-brand-500 font-medium"><i className="fa-solid fa-plus mr-1"></i>Add</button></div><div className="space-y-2">{form.items.map((item, idx) => (<div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-5"><input value={item.desc} onChange={e => setItem(idx, 'desc', e.target.value)} placeholder="Description" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-2"><input type="number" min="1" value={item.qty} onChange={e => setItem(idx, 'qty', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-3"><input type="number" value={item.rate} onChange={e => setItem(idx, 'rate', Number(e.target.value))} className="w-full border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-1 text-right text-sm font-medium text-gray-700">{fmtCur(item.qty * item.rate)}</div><div className="col-span-1 text-right"><button onClick={() => removeItem(idx)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></div>))}</div><div className="mt-3 pt-3 border-t border-gray-100 text-right"><div className="text-base font-bold text-gray-800">Total: {fmtCur(form.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + form.tax / 100))}</div></div></div><div className="flex gap-3"><button onClick={saveQuotation} className="bg-brand-500 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-600">{form.id ? 'Update' : 'Create'}</button><button onClick={() => setForm(null)} className="bg-gray-100 text-gray-600 px-6 py-2.5 rounded-xl text-sm font-medium">Cancel</button></div></div>); return (<div className="fade-in"><div className="flex items-center justify-between mb-5"><div className="flex gap-2">{['all', 'draft', 'sent', 'accepted'].map(s => <button key={s} onClick={() => {/*filter*/ }} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-500">{s}</button>)}</div><button onClick={startCreate} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Create</button></div><div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase"><th className="px-5 py-3">Number</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead><tbody>{quotations.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(q => { const total = q.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + (q.tax || 18) / 100); return (<tr key={q.id} className="border-t border-gray-50 hover:bg-gray-50/50"><td className="px-5 py-3 font-medium text-gray-800">{q.number}</td><td className="px-5 py-3 text-gray-700">{q.customerName}</td><td className="px-5 py-3 font-semibold text-gray-800">{fmtCur(total)}</td><td className="px-5 py-3"><span className={"px-2.5 py-1 rounded-full text-xs font-semibold " + (statusColors[q.status] || 'bg-gray-100 text-gray-600')}>{q.status}</span></td><td className="px-5 py-3"><div className="flex items-center gap-2"><button onClick={() => setModalContent(<QuotationPreview quotation={q} />)} className="text-brand-500 hover:text-brand-600" title="PDF"><i className="fa-solid fa-file-pdf"></i></button><button onClick={() => { setForm({ ...q }); }} className="text-blue-500 hover:text-blue-600"><i className="fa-solid fa-pen-to-square text-xs"></i></button>{q.status === 'draft' && <button onClick={() => updateStatus(q.id, 'sent')} className="text-amber-500 hover:text-amber-600"><i className="fa-solid fa-paper-plane text-xs"></i></button>}<button onClick={() => deleteQ(q.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></td></tr>); })}</tbody></table></div></div>); }
+function QuotationsView() { const { quotations, setQuotations, leads, toast, setModalContent } = useApp(); const [form, setForm] = useState(null); const startCreate = () => { setForm({ number: 'Q-' + String(quotations.length + 1).padStart(3, '0'), leadId: '', customerName: '', customerEmail: '', items: [{ desc: '', qty: 1, rate: 0 }], tax: 18, status: 'draft', validUntil: Date.now() + 864e5 * 30 }) }; const saveQuotation = () => { if (!form.customerName.trim()) { toast('Customer required', 'error'); return; } if (form.id) { setQuotations(prev => prev.map(q => q.id === form.id ? { ...form, updatedAt: Date.now() } : q)); toast('Updated'); } else { setQuotations(prev => [...prev, { ...form, id: genId(), createdAt: Date.now() }]); toast('Created'); } setForm(null); }; const updateStatus = (id, status) => { setQuotations(prev => prev.map(q => q.id === id ? { ...q, status } : q)); toast('Status updated'); }; const deleteQ = (id) => { setQuotations(prev => prev.filter(q => q.id !== id)); toast('Deleted', 'info'); }; const addItem = () => setForm(prev => ({ ...prev, items: [...prev.items, { desc: '', qty: 1, rate: 0 }] })); const removeItem = (idx) => setForm(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) })); const setItem = (idx, key, val) => setForm(prev => ({ ...prev, items: prev.items.map((it, i) => i === idx ? { ...it, [key]: val } : it) })); const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v })); const linkLead = (leadId) => { const lead = leads.find(l => l.id === leadId); if (lead) setForm(prev => ({ ...prev, leadId, customerName: lead.name, customerEmail: lead.email || '' })); }; const statusColors = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-amber-100 text-amber-700', accepted: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600' }; if (form) return (<div className="fade-in bg-white rounded-2xl p-6 border border-gray-100 shadow-sm max-w-3xl"><h3 className="text-lg font-bold text-gray-800 mb-5">{form.id ? 'Edit' : 'Create'} Quotation</h3><div className="grid grid-cols-2 gap-4 mb-5"><div><label className="text-xs font-medium text-gray-500 mb-1 block">Number</label><input value={form.number} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50" readOnly /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Lead</label><select value={form.leadId} onChange={e => linkLead(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white"><option value="">-- Select --</option>{leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Customer *</label><input value={form.customerName} onChange={e => setField('customerName', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Email</label><input value={form.customerEmail} onChange={e => setField('customerEmail', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Valid Until</label><input type="date" value={form.validUntil ? new Date(form.validUntil).toISOString().split('T')[0] : ''} onChange={e => setField('validUntil', new Date(e.target.value).getTime())} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div><div><label className="text-xs font-medium text-gray-500 mb-1 block">Tax %</label><input type="number" value={form.tax} onChange={e => setField('tax', Number(e.target.value))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div></div><div className="mb-5"><div className="flex items-center justify-between mb-2"><label className="text-xs font-semibold text-gray-500 uppercase">Items</label><button onClick={addItem} className="text-xs text-brand-500 font-medium"><i className="fa-solid fa-plus mr-1"></i>Add</button></div><div className="space-y-2">{form.items.map((item, idx) => (<div key={idx} className="grid grid-cols-12 gap-2 items-end"><div className="col-span-5"><input value={item.desc} onChange={e => setItem(idx, 'desc', e.target.value)} placeholder="Description" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-2"><input type="number" min="1" value={item.qty} onChange={e => setItem(idx, 'qty', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-3"><input type="number" value={item.rate} onChange={e => setItem(idx, 'rate', Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div><div className="col-span-1 text-right text-sm font-medium text-gray-700">{fmtCur(item.qty * item.rate)}</div><div className="col-span-1 text-right"><button onClick={() => removeItem(idx)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></div>))}</div><div className="mt-3 pt-3 border-t border-gray-100 text-right"><div className="text-base font-bold text-gray-800">Total: {fmtCur(form.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + form.tax / 100))}</div></div></div><div className="flex gap-3"><button onClick={saveQuotation} className="bg-brand-500 text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-brand-600">{form.id ? 'Update' : 'Create'}</button><button onClick={() => setForm(null)} className="bg-gray-100 text-gray-600 px-6 py-2.5 rounded-xl text-sm font-medium">Cancel</button></div></div>); return (<div className="fade-in"><div className="flex items-center justify-between mb-5"><div className="flex gap-2">{['all', 'draft', 'sent', 'accepted'].map(s => <button key={s} onClick={() => {/*filter*/ }} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-500">{s}</button>)}</div><button onClick={startCreate} className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium"><i className="fa-solid fa-plus mr-1.5"></i>Create</button></div><div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase"><th className="px-5 py-3">Number</th><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead><tbody>{quotations.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(q => { const total = q.items.reduce((s, i) => s + i.qty * i.rate, 0) * (1 + (q.tax || 18) / 100); return (<tr key={q.id} className="border-t border-gray-50 hover:bg-gray-50/50"><td className="px-5 py-3 font-medium text-gray-800">{q.number}</td><td className="px-5 py-3 text-gray-700">{q.customerName}</td><td className="px-5 py-3 font-semibold text-gray-800">{fmtCur(total)}</td><td className="px-5 py-3"><span className={"px-2.5 py-1 rounded-full text-xs font-semibold " + (statusColors[q.status] || 'bg-gray-100 text-gray-600')}>{q.status}</span></td><td className="px-5 py-3"><div className="flex items-center gap-2"><button onClick={() => setModalContent(<QuotationPreview quotation={q} />)} className="text-brand-500 hover:text-brand-600" title="PDF"><i className="fa-solid fa-file-pdf"></i></button><button onClick={() => { setForm({ ...q }); }} className="text-blue-500 hover:text-blue-600"><i className="fa-solid fa-pen-to-square text-xs"></i></button>{q.status === 'draft' && <button onClick={() => updateStatus(q.id, 'sent')} className="text-amber-500 hover:text-amber-600"><i className="fa-solid fa-paper-plane text-xs"></i></button>}<button onClick={() => deleteQ(q.id)} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-trash-can text-xs"></i></button></div></td></tr>); })}</tbody></table></div></div>); }
 
 function QuotationPreview({ quotation }) { const { setModalContent, toast } = useApp(); const pdfRef = useRef(null); const [dl, setDl] = useState(false); const subtotal = quotation.items.reduce((s, i) => s + i.qty * i.rate, 0); const taxAmt = subtotal * (quotation.tax || 18) / 100; const grandTotal = subtotal + taxAmt; const handleDownload = async () => { setDl(true); try { await html2pdf().set({ margin: [0, 0, 0, 0], filename: 'Quotation-' + quotation.number + '.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(pdfRef.current).save(); toast('PDF downloaded'); } catch (e) { toast('Failed', 'error'); } setDl(false); }; return (<div className="p-0"><div className="flex items-center justify-between p-5 border-b border-gray-100"><h2 className="text-lg font-bold text-gray-800">Quotation Preview</h2><div className="flex items-center gap-2"><button onClick={handleDownload} disabled={dl} className="bg-brand-500 hover:bg-brand-600 disabled:bg-brand-300 text-white px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><i className={"fa-solid " + (dl ? 'fa-spinner fa-spin' : 'fa-download')}></i>{dl ? 'Generating...' : 'Download PDF'}</button><button onClick={() => setModalContent(null)} className="text-gray-400 hover:text-gray-600 p-1"><i className="fa-solid fa-xmark text-lg"></i></button></div></div><div className="p-6 bg-gray-100 flex justify-center overflow-y-auto max-h-[75vh]"><div ref={pdfRef} style={{ width: '794px', minHeight: '1123px', padding: '48px', background: '#fff', fontFamily: 'DM Sans, sans-serif' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px' }}><div><div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}><div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '22px', fontWeight: 700 }}>N</div><span style={{ fontSize: '24px', fontWeight: 700, color: '#0B1120' }}>NexaCRM</span></div><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>123 Business Avenue, Bengaluru</p><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>admin@nexacrm.com</p></div><div style={{ textAlign: 'right' }}><h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0B1120', margin: 0 }}>QUOTATION</h1><p style={{ fontSize: '14px', color: '#10b981', fontWeight: 600, margin: '4px 0 16px' }}>{quotation.number}</p><p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Date: {fmtDate(quotation.createdAt)}</p></div></div><div style={{ background: '#f8fafc', borderRadius: '12px', padding: '20px', marginBottom: '32px', border: '1px solid #e2e8f0' }}><p style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '8px' }}>Bill To</p><p style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>{quotation.customerName}</p><p style={{ fontSize: '13px', color: '#64748b', margin: '2px 0 0' }}>{quotation.customerEmail}</p></div><table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '13px' }}><thead><tr style={{ background: '#0B1120' }}><th style={{ padding: '12px', textAlign: 'left', color: '#fff', fontWeight: 600, fontSize: '12px' }}>#</th><th style={{ padding: '12px', textAlign: 'left', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Description</th><th style={{ padding: '12px', textAlign: 'center', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Qty</th><th style={{ padding: '12px', textAlign: 'right', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Rate</th><th style={{ padding: '12px', textAlign: 'right', color: '#fff', fontWeight: 600, fontSize: '12px' }}>Amount</th></tr></thead><tbody>{quotation.items.map((item, idx) => <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}><td style={{ padding: '14px 12px', color: '#94a3b8' }}>{idx + 1}</td><td style={{ padding: '14px 12px', color: '#1e293b', fontWeight: 500 }}>{item.desc}</td><td style={{ padding: '14px 12px', textAlign: 'center', color: '#475569' }}>{item.qty}</td><td style={{ padding: '14px 12px', textAlign: 'right', color: '#475569' }}>{fmtCur(item.rate)}</td><td style={{ padding: '14px 12px', textAlign: 'right', color: '#1e293b', fontWeight: 600 }}>{fmtCur(item.qty * item.rate)}</td></tr>)}</tbody></table><div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '40px' }}><table style={{ fontSize: '13px', borderCollapse: 'collapse', minWidth: '260px' }}><tbody><tr><td style={{ padding: '8px 0', color: '#64748b' }}>Subtotal</td><td style={{ padding: '8px 16px', textAlign: 'right', color: '#1e293b', fontWeight: 500 }}>{fmtCur(subtotal)}</td></tr><tr><td style={{ padding: '8px 0', color: '#64748b' }}>Tax ({quotation.tax || 18}%)</td><td style={{ padding: '8px 16px', textAlign: 'right', color: '#1e293b', fontWeight: 500 }}>{fmtCur(taxAmt)}</td></tr><tr style={{ borderTop: '2px solid #0B1120' }}><td style={{ padding: '12px 0', color: '#0B1120', fontWeight: 700, fontSize: '15px' }}>Grand Total</td><td style={{ padding: '12px 16px', textAlign: 'right', color: '#0B1120', fontWeight: 800, fontSize: '18px' }}>{fmtCur(grandTotal)}</td></tr></tbody></table></div></div></div></div>); }
 
@@ -1831,7 +2005,7 @@ function InvoicePreview({ invoice }) {
           <button onClick={() => setModalContent(null)} className="text-gray-400 hover:text-gray-600 p-1"><i className="fa-solid fa-xmark text-lg"></i></button>
         </div>
       </div>
-      <div className="p-6 bg-gray-101 flex justify-center overflow-y-auto max-h-[75vh]">
+      <div className="p-6 bg-gray-100 flex justify-center overflow-y-auto max-h-[75vh]">
         <div ref={pdfRef} style={{ width: '794px', minHeight: '1123px', padding: '48px', background: '#fff', fontFamily: 'DM Sans, sans-serif' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px' }}>
             <div>
@@ -2048,6 +2222,7 @@ function App() {
       case 'invoices': return <InvoicesView />; 
       case 'team': return <TeamView />; 
       case 'org': return <CompanyStructureView />;
+      case 'roles': return <RolesPermissionsView />;
       default: return <Dashboard />; 
     } 
   };
