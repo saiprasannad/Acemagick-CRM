@@ -285,6 +285,19 @@ function AppProvider({ children }) {
   return <AppContext.Provider value={val}>{children}</AppContext.Provider>;
 }
 function useApp() { return useContext(AppContext) }
+const useApp = () => useContext(AppContext);
+
+function canUserAccessLead(lead, user, roles, action = 'view') {
+  if (!user || !roles) return false;
+  const role = roles.find(r => r.id === user.role_id);
+  if (!role) return false;
+  if (role.record_scope === 'all') return true;
+  const permissions = role.permissions?.leads?.[action] || role.permissions?.leads?.view;
+  if (!permissions) return false;
+  if (role.record_scope === 'own') { return lead.assignedTo === user.id; }
+  if (role.record_scope === 'department' || role.record_scope === 'department_and_sub') { return true; }
+  return false;
+}
 function StageBadge({ stageId }) { const { allStages } = useApp(); const s = allStages.find(x => x.id === stageId); return s ? <span className="stage-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span> : null; }
 function Toasts() { 
   const { toasts } = useApp(); 
