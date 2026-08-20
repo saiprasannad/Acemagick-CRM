@@ -1144,9 +1144,48 @@ function CreateLeadModal({ defaultPipelineId }) {
     </div>
   ); 
 }
+function EditLeadModal({ leadId, onClose }) {
+  const { leads, setLeads, toast, allStages, users } = useApp();
+  const lead = leads.find(l => l.id === leadId);
+  const [form, setForm] = useState(lead ? { ...lead } : {});
 
+  const save = () => {
+    if (!form.name.trim() || !form.phone.trim()) { return toast('Name and phone required', 'error'); }
+    setLeads(prev => prev.map(l => l.id === leadId ? { 
+      ...l, 
+      ...form, 
+      updatedAt: Date.now(),
+      activities: [...(l.activities || []), { type: 'note', text: 'Lead details updated', at: Date.now(), author: 'System' }]
+    } : l));
+    toast('Lead details updated successfully!');
+    onClose();
+  };
+
+  if (!lead) return null;
+  const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-800">Edit Lead Info</h2>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="col-span-2"><label className="text-xs font-medium text-gray-500 mb-1 block">Name *</label><input value={form.name} onChange={e => set('name', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Phone *</label><input value={form.phone} onChange={e => set('phone', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Email</label><input value={form.email} onChange={e => set('email', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Company</label><input value={form.company} onChange={e => set('company', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Interest</label><input value={form.interest} onChange={e => set('interest', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div className="col-span-2"><label className="text-xs font-medium text-gray-500 mb-1 block">Responsible Person</label><select value={form.assignedTo} onChange={e => set('assignedTo', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white"><option value="">-- Select Employee --</option>{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Budget</label><input value={form.budget} onChange={e => set('budget', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" /></div>
+        <div><label className="text-xs font-medium text-gray-500 mb-1 block">Source</label><select value={form.source} onChange={e => set('source', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white">{['WhatsApp', 'Website', 'Referral', 'LinkedIn', 'Other'].map(s => <option key={s}>{s}</option>)}</select></div>
+      </div>
+      <button onClick={save} className="w-full mt-6 bg-brand-500 text-white py-3 rounded-xl font-medium text-sm hover:bg-brand-600">Save Changes</button>
+    </div>
+  );
+}
 function LeadDetail({ leadId }) {
-  const { leads, setLeads, toast, setModalContent, navigate, allStages, pipelines, transitionLead, currentUser, setWhatsappTarget } = useApp();
+  const { leads, setLeads, toast, setModalContent, navigate, allStages, pipelines, transitionLead, currentUser, setWhatsappTarget, users, roles } = useApp();
   const lead = leads.find(l => l.id === leadId);
   const [comment, setComment] = useState('');
   const [editNotes, setEditNotes] = useState(lead ? lead.notes : '');
@@ -1157,6 +1196,9 @@ function LeadDetail({ leadId }) {
   const [waInput, setWaInput] = useState('');
   const waPollRef = useRef(null);
   const activities = lead ? (lead.activities || []) : [];
+
+  // Permission Check: Can the user edit this lead?
+  const canEdit = lead ? canUserAccessLead(lead, currentUser, roles, 'edit') : false;
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [activities.length]);
   useEffect(() => { if (lead) setEditNotes(lead.notes); }, [leadId, lead]);
@@ -1222,8 +1264,44 @@ function LeadDetail({ leadId }) {
   return (
     <div className="p-0 flex" style={{ minHeight: '70vh' }}>
       <div className="w-[340px] shrink-0 border-r border-gray-100 overflow-y-auto p-6" style={{ maxHeight: '85vh' }}>
-        <div className="flex items-center gap-3 mb-6"><div className="w-12 h-12 rounded-2xl bg-brand-50 flex items-center justify-center text-lg font-bold text-brand-600">{lead.name.split(' ').map(n => n[0]).join('')}</div><div className="min-w-0 flex-1"><div className="text-base font-bold text-gray-800 truncate">{lead.name}</div><div className="text-xs text-gray-400 truncate">{lead.company || 'No company'}</div></div></div>
-        <div className="mb-5"><div className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Stage</div><div className="flex flex-col gap-2">{pipelines.map(p => (<div key={p.id}><div className="text-[10px] text-gray-400 mb-1">{p.name}</div><div className="flex flex-wrap gap-1.5">{p.stages.map(s => (<button key={s.id} onClick={() => moveStage(s.id)} className={"px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all " + (lead.stage === s.id ? 'border-transparent text-white shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300')} style={lead.stage === s.id ? { background: s.color } : {}}>{s.label}</button>))}</div></div>))}</div></div>
+        
+        {/* Lead Header with Edit Button */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-2xl bg-brand-50 flex items-center justify-center text-lg font-bold text-brand-600">{lead.name.split(' ').map(n => n[0]).join('')}</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-bold text-gray-800 truncate">{lead.name}</div>
+            <div className="text-xs text-gray-400 truncate">{lead.company || 'No company'}</div>
+          </div>
+          {canEdit && (
+            <button onClick={() => setModalContent(<EditLeadModal leadId={leadId} onClose={() => setModalContent(null)} />)} className="text-gray-400 hover:text-blue-500 p-1.5 rounded-md hover:bg-blue-50" title="Edit Lead Info">
+              <i className="fa-solid fa-pen text-xs"></i>
+            </button>
+          )}
+        </div>
+
+        {/* Stage Section (Read-only if no edit access) */}
+        <div className="mb-5">
+          <div className="text-[10px] font-semibold text-gray-400 uppercase mb-2">Stage</div>
+          {canEdit ? (
+            <div className="flex flex-col gap-2">
+              {pipelines.map(p => (
+                <div key={p.id}>
+                  <div className="text-[10px] text-gray-400 mb-1">{p.name}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {p.stages.map(s => (
+                      <button key={s.id} onClick={() => moveStage(s.id)} className={"px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all " + (lead.stage === s.id ? 'border-transparent text-white shadow-sm' : 'border-gray-200 text-gray-500 hover:border-gray-300')} style={lead.stage === s.id ? { background: s.color } : {}}>{s.label}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              <StageBadge stageId={lead.stage} />
+            </div>
+          )}
+        </div>
+
         <div className="space-y-3 mb-5">
           {[
             ['Phone', lead.phone, 'fa-solid fa-phone', 'text-blue-500'], 
@@ -1231,7 +1309,8 @@ function LeadDetail({ leadId }) {
             ['Interest', lead.interest || '—', 'fa-solid fa-tag', 'text-amber-500'], 
             ['Budget', lead.budget || '—', 'fa-solid fa-indian-rupee-sign', 'text-emerald-500'], 
             ['Timeline', lead.timeline || '—', 'fa-solid fa-clock', 'text-gray-500'], 
-            ['Source', lead.source || '—', 'fa-solid fa-link', 'text-gray-500']
+            ['Source', lead.source || '—', 'fa-solid fa-link', 'text-gray-500'],
+            ['Responsible Person', users.find(u => u.id === lead.assignedTo)?.name || 'Unassigned', 'fa-solid fa-user-tag', 'text-indigo-500']
           ].map(([label, val, icon, iconColor]) => (
             <div key={label} className="flex items-start gap-2.5">
               <i className={`${icon} ${iconColor} text-xs mt-1 w-4 text-center`}></i>
@@ -1242,6 +1321,7 @@ function LeadDetail({ leadId }) {
             </div>
           ))}
         </div>
+        
         <div className="mt-6 border-t border-gray-100 pt-4">
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] font-semibold text-gray-400 uppercase">WhatsApp Chat</div>
@@ -1270,13 +1350,16 @@ function LeadDetail({ leadId }) {
             <button onClick={handleLeadWaSend} className="bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1"><i className="fa-solid fa-paper-plane text-[10px]"></i></button>
           </div>
         </div>
+        
         <div className="mb-4 mt-6"><button onClick={() => setShowNotes(!showNotes)} className="text-xs font-medium text-gray-500 hover:text-gray-700 flex items-center gap-1.5"><i className={"fa-solid fa-chevron-" + (showNotes ? 'up' : 'down') + " text-[10px]"}></i>Internal Notes</button>{showNotes && (<div className="mt-2"><textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs resize-none h-20" placeholder="Add internal notes..." /><button onClick={saveNotes} className="mt-1.5 bg-brand-500 text-white px-3 py-1.5 rounded-lg text-[11px] font-medium">Save</button></div>)}</div>
+        
         <div className="pt-4 border-t border-gray-100 space-y-2">
           <button onClick={() => { setModalContent(null); navigate('email'); }} className="w-full bg-purple-50 text-purple-600 hover:bg-purple-100 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2"><i className="fa-solid fa-envelope"></i>Send Email</button>
           <button onClick={handleWhatsAppClick} className="w-full bg-green-50 text-green-600 hover:bg-green-100 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2"><i className="fa-brands fa-whatsapp"></i>Open WhatsApp Chat</button>
           <button onClick={() => { setModalContent(null); navigate('calls'); }} className="w-full bg-blue-50 text-blue-600 hover:bg-blue-100 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2"><i className="fa-solid fa-phone"></i>Call</button>
         </div>
       </div>
+      
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="px-6 py-3 border-b border-gray-100 flex items-center justify-between shrink-0"><div className="flex items-center gap-2"><i className="fa-solid fa-comments text-brand-500"></i><span className="text-sm font-semibold text-gray-800">Comments & Activity</span><span className="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded-full">{activities.length}</span></div></div>
         <div className="px-6 py-3 border-b border-gray-50 shrink-0 bg-gray-50/50"><div className="flex gap-3"><div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-bold text-brand-600 shrink-0">A</div><div className="flex-1"><textarea value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(); } }} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:bg-white transition-colors" rows={2} placeholder="Add a comment..." /><div className="flex items-center justify-between mt-2"><div className="flex gap-1">{[{ icon: 'fa-solid fa-phone', label: 'Log Call', color: 'text-blue-500', bg: 'hover:bg-blue-50', fn: () => { setLeads(prev => prev.map(l => l.id === leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'call', text: 'Call logged', at: Date.now(), author: currentUser?.name || 'Admin User' }] } : l)); toast('Call logged'); } }, { icon: 'fa-solid fa-envelope', label: 'Log Email', color: 'text-purple-500', bg: 'hover:bg-purple-50', fn: () => { setLeads(prev => prev.map(l => l.id === leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'email', text: 'Email logged', at: Date.now(), author: currentUser?.name || 'Admin User' }] } : l)); toast('Email logged'); } }, { icon: 'fa-solid fa-calendar', label: 'Log Meeting', color: 'text-orange-500', bg: 'hover:bg-orange-50', fn: () => { setLeads(prev => prev.map(l => l.id === leadId ? { ...l, updatedAt: Date.now(), activities: [...(l.activities || []), { type: 'meeting', text: 'Meeting logged', at: Date.now(), author: currentUser?.name || 'Admin User' }] } : l)); toast('Meeting logged'); } }].map(b => (<button key={b.label} onClick={b.fn} className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${b.color} ${b.bg} transition-all flex items-center gap-1`}><i className={b.icon}></i>{b.label}</button>))}</div><button onClick={addComment} disabled={!comment.trim()} className="bg-brand-500 hover:bg-brand-600 disabled:bg-gray-200 disabled:text-gray-400 text-white px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all"><i className="fa-solid fa-paper-plane text-[10px]"></i>Send</button></div></div></div></div>
