@@ -391,22 +391,77 @@ function Sidebar() {
 function TopBar() { const { view } = useApp(); return <header className="h-14 bg-white border-b border-gray-100 flex items-center px-4 gap-4 shrink-0"><h2 className="text-sm font-semibold text-gray-800">{VIEW_TITLES[view] || view}</h2><div className="flex-1"></div></header>; }
 
 function Dashboard() {
-  const { leads, invoices, allStages } = useApp();
+  const { leads, invoices, allStages, users } = useApp();
+  
+  // Dashboard Date Filter State
+  const [dateFilter, setDateFilter] = useState('month');
+  const [customDateFrom, setCustomDateFrom] = useState('');
+  const [customDateTo, setCustomDateTo] = useState('');
+
+  // Helper to parse budget strings like "₹2,00,000" into numbers
+  const parseBudget = (str) => parseInt((str || '0').replace(/[^\d]/g, '')) || 0;
+
+  // Filter Won Leads based on Date Range
+  const filteredWonLeads = useMemo(() => {
+    let won = leads.filter(l => allStages.find(s => s.id === l.stage)?.type === 'success');
+    
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    
+    if (dateFilter === 'today') won = won.filter(l => l.createdAt >= startOfToday);
+    if (dateFilter === 'yesterday') won = won.filter(l => l.createdAt >= startOfToday - 86400000 && l.createdAt < startOfToday);
+    if (dateFilter === '7days') won = won.filter(l => l.createdAt >= startOfToday - 7 * 86400000);
+    if (dateFilter === 'month') won = won.filter(l => l.createdAt >= new Date(now.getFullYear(), now.getMonth(), 1).getTime());
+    if (dateFilter === 'last_month') {
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      won = won.filter(l => l.createdAt >= lastMonth && l.createdAt < thisMonth);
+    }
+    if (dateFilter === 'custom' && customDateFrom && customDateTo) {
+      const from = new Date(customDateFrom).getTime();
+      const to = new Date(customDateTo).getTime() + 86400000;
+      won = won.filter(l => l.createdAt >= from && l.createdAt <= to);
+    }
+    
+    return won;
+  }, [leads, allStages, dateFilter, customDateFrom, customDateTo]);
+
+  // Calculate Overall Company Revenue for the period
+  const totalRevenue = filteredWonLeads.reduce((sum, l) => sum + parseBudget(l.budget), 0);
+
+  // Calculate Revenue by Responsible Person
+  const revenueByPerson = useMemo(() => {
+    const map = {};
+    filteredWonLeads.forEach(l => {
+      const uid = l.assignedTo || 'unassigned';
+      if (!map[uid]) map[uid] = { count: 0, revenue: 0 };
+      map[uid].count++;
+      map[uid].revenue += parseBudget(l.budget);
+    });
+    
+    return Object.entries(map).map(([uid, data]) => ({
+      user: users.find(u => u.id === uid)?.name || 'Unassigned',
+      ...data
+    })).sort((a, b) => b.revenue - a.revenue); // Sort highest revenue first
+  }, [filteredWonLeads, users]);
+
+  // Existing overall stats (unchanged, based on all time)
   const total = leads.length;
-  const won = leads.filter(l => allStages.find(s => s.id === l.stage)?.type === 'success').length;
-  const convRate = total ? Math.round(won / total * 100) : 0;
-  const pipelineVal = leads.filter(l => !allStages.find(s => s.id === l.stage)?.type).reduce((s, l) => { const b = parseInt((l.budget || '0').replace(/[^\d]/g, '')) || 0; return s + b; }, 0);
-  const revenue = invoices.filter(i => i.status === 'paid').reduce((s, i) => { const sub = i.items.reduce((a, x) => a + x.qty * x.rate, 0); return s + sub * (1 + (i.tax || 18) / 100); }, 0);
+  const pipelineVal = leads.filter(l => !allStages.find(s => s.id === l.stage)?.type).reduce((s, l) => s + parseBudget(l.budget), 0);
+  const paidRevenue = invoices.filter(i => i.status === 'paid').reduce((s, i) => { const sub = i.items.reduce((a, x) => a + x.qty * x.rate, 0); return s + sub * (1 + (i.tax || 18) / 100); }, 0);
+  
   const allActs = useMemo(() => { const a = []; leads.forEach(l => (l.activities || []).forEach(act => a.push({ ...act, leadName: l.name, leadId: l.id }))); a.sort((a, b) => b.at - a.at); return a; }, [leads]);
+  
   const stats = [
-    { label: 'Total Leads', val: total, sub: won + ' won', icon: 'fa-solid fa-users', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-500' },
-    { label: 'Pipeline', val: fmtCur(pipelineVal), sub: 'Active', icon: 'fa-solid fa-chart-line', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
-    { label: 'Conv. Rate', val: convRate + '%', icon: 'fa-solid fa-percent', iconBg: 'bg-amber-50', iconColor: 'text-amber-500', bar: true, barPct: convRate },
-    { label: 'Revenue', val: fmtCur(revenue), sub: 'Paid', icon: 'fa-solid fa-indian-rupee-sign', iconBg: 'bg-rose-50', iconColor: 'text-rose-500' }
+    { label: 'Total Leads', val: total, sub: 'All time', icon: 'fa-solid fa-users', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-500' },
+    { label: 'Pipeline Value', val: fmtCur(pipelineVal), sub: 'Active Deals', icon: 'fa-solid fa-chart-line', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
+    { label: 'Invoiced Revenue', val: fmtCur(paidRevenue), sub: 'Paid Invoices', icon: 'fa-solid fa-receipt', iconBg: 'bg-rose-50', iconColor: 'text-rose-500' }
   ];
+
   return (
     <div className="fade-in">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* Top Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {stats.map((c, i) => (
           <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
             <div className="flex items-center justify-between mb-3">
@@ -414,31 +469,89 @@ function Dashboard() {
               <div className={`w-9 h-9 rounded-lg ${c.iconBg} flex items-center justify-center`}><i className={`${c.icon} ${c.iconColor} text-sm`}></i></div>
             </div>
             <div className="text-3xl font-bold text-gray-800">{c.val}</div>
-            {c.bar ? (<div className="w-full bg-gray-100 rounded-full h-1.5 mt-2"><div className="bg-amber-400 h-1.5 rounded-full" style={{ width: Math.max(c.barPct, 4) + '%' }}></div></div>) : c.sub && <div className="text-xs text-gray-400 mt-1">{c.sub}</div>}
+            <div className="text-xs text-gray-400 mt-1">{c.sub}</div>
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-4">Pipeline by Stage</h3>
-          <div className="space-y-3">
-            {allStages.filter(s => !s.type).map(s => {
-              const cnt = leads.filter(l => l.stage === s.id).length;
-              const pct = total ? Math.round(cnt / total * 100) : 0;
-              return <div key={s.id} className="flex items-center gap-3"><span className="text-xs w-28 text-gray-500 truncate">{s.label}</span><div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden"><div className="h-full rounded-full flex items-center justify-end pr-2" style={{ width: Math.max(pct, 8) + '%', background: s.color }}><span className="text-[10px] text-white font-bold">{cnt}</span></div></div></div>;
-            })}
+
+      {/* Revenue Dashboard Section */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+          <h3 className="text-lg font-bold text-gray-800">Revenue Dashboard <span className="text-sm font-normal text-gray-400">(Won Leads)</span></h3>
+          <div className="flex flex-wrap items-center gap-3">
+            <select value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white">
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="7days">Last 7 Days</option>
+              <option value="month">This Month</option>
+              <option value="last_month">Last Month</option>
+              <option value="custom">Custom Range</option>
+            </select>
+            {dateFilter === 'custom' && (
+              <div className="flex items-center gap-2">
+                <input type="date" value={customDateFrom} onChange={e => setCustomDateFrom(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+                <span className="text-xs text-gray-500">to</span>
+                <input type="date" value={customDateTo} onChange={e => setCustomDateTo(e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm" />
+              </div>
+            )}
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-800 mb-4">Recent Activity</h3>
-          <div className="space-y-3 max-h-72 overflow-y-auto">
-            {allActs.slice(0, 8).map((a, i) => (
-              <div key={i} className="flex gap-3 items-start">
-                <div className={`w-7 h-7 rounded-full ${ACT_COLORS[a.type] || 'bg-gray-100 text-gray-400'} flex items-center justify-center shrink-0 mt-0.5`}><i className={`${ACT_ICONS[a.type] || 'fa-solid fa-circle text-gray-400'} text-xs`}></i></div>
-                <div><p className="text-xs text-gray-600">{a.text}</p><p className="text-[10px] text-gray-400 mt-0.5">{a.leadName}</p></div>
-              </div>
-            ))}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Overall Company Revenue Card */}
+          <div className="lg:col-span-1 bg-gradient-to-br from-brand-600 to-brand-800 rounded-2xl p-6 text-white flex flex-col justify-between min-h-[150px]">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium opacity-90">Overall Company Revenue</span>
+              <i className="fa-solid fa-sack-dollar text-xl opacity-80"></i>
+            </div>
+            <div className="text-4xl font-extrabold mt-4">{fmtCur(totalRevenue)}</div>
+            <div className="text-xs opacity-75 mt-2">{filteredWonLeads.length} Deals Won in this period</div>
           </div>
+
+          {/* Responsible Person Breakdown */}
+          <div className="lg:col-span-2 overflow-x-auto">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Revenue by Responsible Person</h4>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                  <th className="pb-2">Employee</th>
+                  <th className="pb-2 text-center">Deals Won</th>
+                  <th className="pb-2 text-right">Revenue Generated</th>
+                  <th className="pb-2 text-right">% of Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {revenueByPerson.length === 0 && (
+                  <tr><td colSpan="4" className="text-center text-gray-400 py-8 text-sm">No deals won in the selected period.</td></tr>
+                )}
+                {revenueByPerson.map((r, i) => (
+                  <tr key={i} className="border-b border-gray-50 last:border-0">
+                    <td className="py-3 font-medium text-gray-800 flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">{r.user.charAt(0)}</div>
+                      {r.user}
+                    </td>
+                    <td className="py-3 text-center text-gray-600">{r.count}</td>
+                    <td className="py-3 text-right font-semibold text-emerald-600">{fmtCur(r.revenue)}</td>
+                    <td className="py-3 text-right text-gray-500 text-xs">{totalRevenue > 0 ? ((r.revenue / totalRevenue) * 100).toFixed(1) : 0}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-800 mb-4">Recent Activity</h3>
+        <div className="space-y-3 max-h-72 overflow-y-auto">
+          {allActs.slice(0, 8).map((a, i) => (
+            <div key={i} className="flex gap-3 items-start">
+              <div className={`w-7 h-7 rounded-full ${ACT_COLORS[a.type] || 'bg-gray-100 text-gray-400'} flex items-center justify-center shrink-0 mt-0.5`}><i className={`${ACT_ICONS[a.type] || 'fa-solid fa-circle text-gray-400'} text-xs`}></i></div>
+              <div><p className="text-xs text-gray-600">{a.text}</p><p className="text-[10px] text-gray-400 mt-0.5">{a.leadName}</p></div>
+            </div>
+          ))}
+          {allActs.length === 0 && <div className="text-center text-sm text-gray-400 py-6">No recent activity.</div>}
         </div>
       </div>
     </div>
