@@ -1184,6 +1184,7 @@ function EditLeadModal({ leadId, onClose }) {
     </div>
   );
 }
+
 function LeadDetail({ leadId }) {
   const { leads, setLeads, toast, setModalContent, navigate, allStages, pipelines, transitionLead, currentUser, setWhatsappTarget, users, roles } = useApp();
   const lead = leads.find(l => l.id === leadId);
@@ -1351,7 +1352,7 @@ function LeadDetail({ leadId }) {
           </div>
         </div>
         
-        <div className="mb-4 mt-6"><button onClick={() => setShowNotes(!showNotes)} className="text-xs font-medium text-gray-500 hover:text-gray-700 flex items-center gap-1.5"><i className={"fa-solid fa-chevron-" + (showNotes ? 'up' : 'down') + " text-[10px]"}></i>Internal Notes</button>{showNotes && (<div className="mt-2"><textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs resize-none h-20" placeholder="Add internal notes..." /><button onClick={saveNotes} className="mt-1.5 bg-brand-500 text-white px-3 py-1.5 rounded-lg text-[11px] font-medium">Save</button></div>)}</div>
+        <div className="mb-4 mt-6"><button onClick={() => setShowNotes(!showNotes)} className="text-xs font-medium text-gray-500 hover:text-gray-700 flex items-center gap-1.5"><i className={"fa-solid fa-chevron-" + (showNotes ? 'up' : 'down') + " text-[10px]"}></i>Internal Notes</button>{showNotes && canEdit && (<div className="mt-2"><textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs resize-none h-20" placeholder="Add internal notes..." /><button onClick={saveNotes} className="mt-1.5 bg-brand-500 text-white px-3 py-1.5 rounded-lg text-[11px] font-medium">Save</button></div>)}</div>
         
         <div className="pt-4 border-t border-gray-100 space-y-2">
           <button onClick={() => { setModalContent(null); navigate('email'); }} className="w-full bg-purple-50 text-purple-600 hover:bg-purple-100 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-2"><i className="fa-solid fa-envelope"></i>Send Email</button>
